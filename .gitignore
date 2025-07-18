@@ -26,3 +26,5 @@ rules.ninja
 Debug
 x64
 /scenes/pa2/ajax.obj
+/scenes/pa1/bunny.png
+/scenes/pa1/bunny.exr
