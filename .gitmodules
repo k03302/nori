@@ -3,7 +3,7 @@
 	url = https://github.com/wjakob/filesystem
 [submodule "ext/tbb"]
 	path = ext/tbb
-	url = https://github.com/wjakob/tbb
+	url = https://github.com/k03302/tbb
 [submodule "ext/pugixml"]
 	path = ext/pugixml
 	url = http://github.com/zeux/pugixml
