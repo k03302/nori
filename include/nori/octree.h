@@ -3,32 +3,52 @@
 #include <nori/bbox.h>
 NORI_NAMESPACE_BEGIN
 
+
+static const int TOTAL_ELEMENT_COUNT = 10;
 class NodeAlloc nodeAlloc;
 
-struct Element
+typedef struct Element
 {
-    int index;
-    Mesh* mesh;
+    int fIndex;     // face(triangle) index
+    Mesh* mesh;     // pointer to the mesh that has the traiangle
+} Element;
+
+class LeafNode
+{
+public:
+    bool isFull() { return elementCount == TOTAL_ELEMENT_COUNT; }
+    void initialize() { elementCount = 0; }
+    bool push(Element e) {
+        if(isFull()) return false;
+        elements[elementCount++] = e;
+    }
+
+    
+
+private:
+    Element elements[TOTAL_ELEMENT_COUNT];
+    int elementCount = 0;
+
 };
+
 
 class OctNode
 {
 public:
     const static int CHILD_COUNT = 8;
-    const static int ELEMENT_COUNT = 10;
     
     bool isLeaf()
     {
         return bIsLeaf;
     }
 
-    OctNode* push(const int& element)
+    OctNode* push(const Element& element)
     {
         if(isLeaf())
         {
-            if(elementNo < ELEMENT_COUNT)
+            if(elementNo < TOTAL_ELEMENT_COUNT)
             {
-                elements[elementNo++] = element;
+                //(pElementArray*)[elementNo++] = element;
                 return this;
             }
             else
@@ -70,7 +90,7 @@ public:
         }
     }
 
-    void pushToChildren(const int& element)
+    void pushToChildren(const Element& element)
     {
         for(int i = 0; i < 2; i++)
         {
@@ -108,8 +128,8 @@ public:
 
 private:
     BoundingBox3d bbox;
-    OctNode* children[CHILD_COUNT];
-    int elements[ELEMENT_COUNT];
+    OctNode *children[CHILD_COUNT];
+    Element (*pElementArray)[TOTAL_ELEMENT_COUNT];
     int depth;
     int elementNo;
     bool bIsLeaf;
