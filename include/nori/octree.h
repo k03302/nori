@@ -1,33 +1,47 @@
 #pragma once
 #include <nori/common.h>
 #include <nori/bbox.h>
+#include <queue>
+#include <nori/mesh.h>
 NORI_NAMESPACE_BEGIN
 
 
-static const int TOTAL_ELEMENT_COUNT = 10;
 class NodeAlloc nodeAlloc;
 
-typedef struct Element
+typedef struct Triangle
 {
     int fIndex;     // face(triangle) index
-    Mesh* mesh;     // pointer to the mesh that has the traiangle
-} Element;
+    Mesh* mesh;     // pointer to the mesh that owns this triangle
+} Triangle;
 
-class LeafNode
+class TriangleList
 {
 public:
+    static const int TOTAL_ELEMENT_COUNT = 10;
+    
+    TriangleList() : elementCount(0) {}
+
     bool isFull() { return elementCount == TOTAL_ELEMENT_COUNT; }
-    void initialize() { elementCount = 0; }
-    bool push(Element e) {
+
+    void empty() { elementCount = 0; }
+
+    bool push(const Triangle& e) {
         if(isFull()) return false;
         elements[elementCount++] = e;
+        return true;
     }
 
-    
+    void foreachEl(std::function<void(Triangle)> callback)
+    {
+        for(int i = 0; i < elementCount; i++)
+        {
+            callback(elements[i]);
+        }
+    }
 
 private:
-    Element elements[TOTAL_ELEMENT_COUNT];
-    int elementCount = 0;
+    Triangle elements[TOTAL_ELEMENT_COUNT];
+    int elementCount;
 
 };
 
@@ -35,117 +49,176 @@ private:
 class OctNode
 {
 public:
-    const static int CHILD_COUNT = 8;
-    
+    OctNode() = default;
+    OctNode(const BoundingBox3f& _bbox, int _depth, bool _bIsLeaf)
+        : bbox(_bbox), depth(_depth), bIsLeaf(_bIsLeaf)
+    {
+        if(bIsLeaf)
+        {
+            data = nodeAlloc.getDataNode();
+        }
+    }
+
+    bool hasData()
+    {
+        return data != nullptr;
+    }
+
     bool isLeaf()
     {
         return bIsLeaf;
     }
 
-    OctNode* push(const Element& element)
+
+    bool push(const Triangle& triangle)
     {
         if(isLeaf())
         {
-            if(elementNo < TOTAL_ELEMENT_COUNT)
+            if(!hasData())
             {
-                //(pElementArray*)[elementNo++] = element;
-                return this;
+                data = nodeAlloc.getDataNode();
+                if(!data) return false;
+            }
+
+            if(!data->isFull())
+            {
+                data->push(triangle);
+                return true;
             }
             else
             {
                 createChildren();
-                pushToChildren(element);
-                
-                bIsLeaf = false;
+                return pushToChildren(triangle);
             }
         }
         else
         {
-            pushToChildren(element);
+            return pushToChildren(triangle);
         }
     }
 
     void createChildren()
     {
-        for(int i = 0; i < 2; i++)
-        {
-            for(int j = 0; j < 2; j++)
-            {
-                for(int k = 0; k < 2; k++)
-                {
-                    int index = 4 * i + 2 * j + k;
-
-                    OctNode* newNode = nodeAlloc.getNode();
-                    const Vector3d diagonal = bbox.max - bbox.min;
-                    const Vector3d childDiagonal = diagonal / 2.0;
-                    const Vector3i childPosVector(i, j, k);
-
-                    const Point3d newMin = childDiagonal * childPosVector;
-                    const Point3d newMax = newMin + childDiagonal;
-                    BoundingBox3d newBbox(newMin, newMax);
-
-                    children[index] = newNode;
-                }
-            }
-        }
-    }
-
-    void pushToChildren(const Element& element)
-    {
-        for(int i = 0; i < 2; i++)
-        {
-            for(int j = 0; j < 2; j++)
-            {
-                for(int k = 0; k < 2; k++)
-                {
-                    int index = 4 * i + 2 * j + k;
-
-                    OctNode* newNode = nodeAlloc.getNode();
-                    const Vector3d diagonal = bbox.max - bbox.min;
-                    const Vector3d childDiagonal = diagonal / 2.0;
-                    const Vector3i childPosVector(i, j, k);
-
-                    const Point3d newMin = childDiagonal * childPosVector;
-                    const Point3d newMax = newMin + childDiagonal;
-                    BoundingBox3d newBbox(newMin, newMax);
-
-                    children[index] = newNode;
-                }
-            }
-        }
+        bIsLeaf = false;
 
         for(int i = 0; i < 8; i++)
         {
-            if (children[i] == nullptr) continue;
-            children[i]->push(element);
+            OctNode* newNode = nodeAlloc.getOctNode();
+            if(newNode == nullptr) return;
+
+            const Vector3d diagonal = bbox.max - bbox.min;
+            const Vector3d childDiagonal = diagonal / 2.0;
+
+            int x = (i | (1 << 0)) ? 1 : 0;
+            int y = (i | (1 << 1)) ? 1 : 0;
+            int z = (i | (1 << 2)) ? 1 : 0;
+
+            // Vector representing the position of child on oct space
+            // (0, 0, 0) = child node with bbox of bottom corner
+            // (1, 1, 1) = child node with bbox of top corner
+            const Vector3i childOctIndex(x, y, z);
+
+            // Calculate the bbox of the child
+            const Point3d childMin = childDiagonal * childOctIndex;
+            const Point3d childMax = childMin + childDiagonal;
+            BoundingBox3f newBbox(childMin, childMax);
+
+            newNode->bbox = newBbox;
+            newNode->depth = depth + 1;
+            newNode->data = nodeAlloc.getDataNode();
+            children[i] = newNode;
         }
+
+        if(hasData())
+        {
+            data->foreachEl([this](Triangle el){
+                this->pushToChildren(el);
+            });
+        }
+
+        nodeAlloc.returnDataNode(data);
+        data = nullptr;
     }
 
-    OctNode() = default;
-    OctNode(const BoundingBox3d& _bbox, int _depth)
-        : bbox(_bbox), depth(_depth), elementNo(0), bIsLeaf(true)
-    {}
+    bool pushToChildren(const Triangle& triangle)
+    {
+        bool success = false;
+
+        for(int i = 0; i < 8; i++)
+        {
+            OctNode *child = children[i];
+            if (child == nullptr) continue;
+            if (child->isIncluding(triangle) && child->push(triangle)) success = true;
+        }
+
+        return success;
+    }
+
+    bool isIncluding(const Triangle& triangle)
+    {
+        if(triangle.mesh == nullptr) return false;
+        BoundingBox3f elementBbox = triangle.mesh->getBoundingBox(triangle.fIndex);
+        return elementBbox.overlaps(bbox);
+    }
 
 private:
-    BoundingBox3d bbox;
-    OctNode *children[CHILD_COUNT];
-    Element (*pElementArray)[TOTAL_ELEMENT_COUNT];
+    BoundingBox3f bbox;
+    OctNode *children[8];
+    TriangleList *data;
     int depth;
-    int elementNo;
     bool bIsLeaf;
 };
+
+
+template <class Element, int Count> class StackAllocator
+{
+private:
+    Element[Count] pool;
+    
+};
+
 
 class NodeAlloc
 {
 private:
-    const static int TOTAL_NODE_COUNT = 1000000;
-    int nodeCount;
-    OctNode nodePool[TOTAL_NODE_COUNT];
+    const static int TOTAL_OCT_NODE_COUNT = 1000000;
+    const static int TOTAL_DATA_NODE_COUNT = 1000000;
+    int octNodeCount;
+    int dataNodeCount;
+    OctNode octNodePool[TOTAL_OCT_NODE_COUNT];
+    TriangleList dataNodePool[TOTAL_DATA_NODE_COUNT];
+    std::queue<OctNode*> tmpOctNodePool;
+    std::queue<TriangleList*> tmpDataNodePool;
+
 public:
-    NodeAlloc() : nodeCount(0) {}
-    OctNode* getNode()
+    NodeAlloc() : octNodeCount(0), dataNodeCount(0) {}
+    OctNode* getOctNode()
     {
-        return &nodePool[nodeCount++];
+        if(!tmpOctNodePool.empty()) {
+            OctNode* octNode = tmpOctNodePool.front();
+            tmpOctNodePool.pop();
+            return octNode;
+        }
+        if(octNodeCount >= TOTAL_OCT_NODE_COUNT) return nullptr;
+        return &octNodePool[octNodeCount++];
+    }
+    TriangleList* getDataNode()
+    {
+        if(!tmpDataNodePool.empty()) {
+            TriangleList* dataNode = tmpDataNodePool.front();
+            tmpDataNodePool.pop();
+            return dataNode;
+        }
+        if(dataNodeCount >= TOTAL_DATA_NODE_COUNT) return nullptr;
+        return &dataNodePool[dataNodeCount++];
+    }
+    void returnOctNode(OctNode* octNode)
+    {
+        tmpOctNodePool.push(octNode);
+    }
+    void returnDataNode(TriangleList* dataNode)
+    {
+        tmpDataNodePool.push(dataNode);
     }
 } nodeAlloc;
 
