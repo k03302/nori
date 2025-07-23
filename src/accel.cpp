@@ -6,6 +6,7 @@
 
 #include <nori/accel.h>
 #include <Eigen/Geometry>
+#include <nori/octree.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -14,6 +15,33 @@ void Accel::addMesh(Mesh *mesh) {
         throw NoriException("Accel: only a single mesh is supported!");
     m_mesh = mesh;
     m_bbox = m_mesh->getBoundingBox();
+
+    OctNode *root = OctNode::allocate();
+    if(!root) return;
+    root->initialize(m_bbox, 0, true);
+
+    std::cout << m_mesh->getTriangleCount() << " triangles" << std::endl;
+
+    for(uint32_t i = 0; i < m_mesh->getTriangleCount(); i++)
+    {
+        Triangle* triangle = Triangle::allocate();
+        if(triangle == nullptr) return;
+        triangle->initialize(i, m_mesh);
+        root->push(*triangle);
+        root->print(std::cout, 0);
+        getchar();
+    }
+
+    root->print(std::cout, 0);
+
+    for(int i = 0; i < 2001; i++)
+    {
+        if(check[i] == 0)
+        {
+            std::cout << "Triangle " << i << " is not used\n";
+        }
+    }
+    std::cout << "end" << std::endl;
 }
 
 void Accel::build() {
