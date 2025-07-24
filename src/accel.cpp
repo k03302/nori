@@ -6,7 +6,6 @@
 
 #include <nori/accel.h>
 #include <Eigen/Geometry>
-#include <nori/octree.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -15,26 +14,28 @@ void Accel::addMesh(Mesh *mesh) {
         throw NoriException("Accel: only a single mesh is supported!");
     m_mesh = mesh;
     m_bbox = m_mesh->getBoundingBox();
-
-    OctNode *root = OctNode::getOctNode(m_bbox, 0, true);
-    if(!root) return;
-
-    std::cout << m_mesh->getTriangleCount() << " triangles" << std::endl;
-
-    for(uint32_t i = 0; i < m_mesh->getTriangleCount(); i++)
-    {
-        Triangle* triangle = Triangle::getTriangle(i, m_mesh);
-        if(triangle == nullptr) return;
-        root->push(*triangle);
-        root->print(std::cout, 0);
-        getchar();
-    }
-
-    root->print(std::cout, 0);
 }
 
 void Accel::build() {
-    /* Nothing to do here for now */
+    m_root = OctNode::getOctNode(m_bbox, 0, true);
+    if (!m_root) return;
+
+    std::cout << m_mesh->getTriangleCount() << " triangles" << std::endl;
+
+    for (uint32_t i = 0; i < m_mesh->getTriangleCount(); i++)
+    {
+        Triangle* triangle = Triangle::getTriangle(i, m_mesh);
+        if (triangle == nullptr) return;
+        m_root->push(*triangle);
+        std::cout << '\r' << "Pushed triangle " << i + 1 << " of "
+            << m_mesh->getTriangleCount() << " triangles" << std::flush
+            << OctNode::getCurrentCount() << ", "
+            << TriangleList::getCurrentCount() << ", "
+            << Triangle::getCurrentCount() << std::flush;
+
+    }
+
+    m_root->print(std::cout, 0);
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const {
