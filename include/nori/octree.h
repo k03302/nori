@@ -67,6 +67,7 @@ protected:
         }
         // else: drop the pointer, don't store more than MaxTmpPool
     }
+
 public:
     static int getCurrentCount()
     {
@@ -328,8 +329,6 @@ public:
 
         bool success = false;
 
-
-
         for (int i = 0; i < 8; i++)
         {
             OctNode *child = children[i];
@@ -384,6 +383,23 @@ public:
                 }
             }
         }
+    }
+
+    const BoundingBox3f &getBoundingBox() const
+    {
+        return bbox;
+    }
+
+    const TriangleList *getData() const
+    {
+        return data;
+    }
+
+    OctNode *getChild(int index) const
+    {
+        if (index < 0 || index >= 8)
+            return nullptr; // Invalid index
+        return children[index];
     }
 
 private:
