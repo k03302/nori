@@ -16,32 +16,21 @@ void Accel::addMesh(Mesh *mesh) {
     m_mesh = mesh;
     m_bbox = m_mesh->getBoundingBox();
 
-    OctNode *root = OctNode::allocate();
+    OctNode *root = OctNode::getOctNode(m_bbox, 0, true);
     if(!root) return;
-    root->initialize(m_bbox, 0, true);
 
     std::cout << m_mesh->getTriangleCount() << " triangles" << std::endl;
 
     for(uint32_t i = 0; i < m_mesh->getTriangleCount(); i++)
     {
-        Triangle* triangle = Triangle::allocate();
+        Triangle* triangle = Triangle::getTriangle(i, m_mesh);
         if(triangle == nullptr) return;
-        triangle->initialize(i, m_mesh);
         root->push(*triangle);
         root->print(std::cout, 0);
         getchar();
     }
 
     root->print(std::cout, 0);
-
-    for(int i = 0; i < 2001; i++)
-    {
-        if(check[i] == 0)
-        {
-            std::cout << "Triangle " << i << " is not used\n";
-        }
-    }
-    std::cout << "end" << std::endl;
 }
 
 void Accel::build() {

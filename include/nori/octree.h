@@ -5,8 +5,6 @@
 #include <nori/mesh.h>
 NORI_NAMESPACE_BEGIN
 
-int check[544900] = {0};
-
 // Allocator singletons
 constexpr int TOTAL_OCT_NODE_COUNT = 1000000;
 constexpr int TOTAL_LIST_COUNT = 1000000;
@@ -42,7 +40,7 @@ private:
     static int currentCount;
     static std::queue<Element*> tmpPool;
 
-public:
+protected:
     static Element* allocate()
     {
         if (!tmpPool.empty()) {
@@ -81,6 +79,22 @@ public:
         initialize(_fIndex, _mesh);
     }
 
+	static Triangle* getTriangle(int _fIndex, Mesh* _mesh)
+	{
+		Triangle* triangle = Triangle::allocate();
+		if (triangle == nullptr) return nullptr;
+		triangle->initialize(_fIndex, _mesh);
+		return triangle;
+	}
+
+    static void returnTriangle(Triangle* triangle)
+    {
+		if (triangle == nullptr) return;
+		triangle->fIndex = -1; // Reset index
+		triangle->mesh = nullptr; // Reset mesh pointer
+		Triangle::deallocate(triangle);
+    }
+
     void initialize(int _fIndex, Mesh* _mesh)
     {
         fIndex = _fIndex;
@@ -98,7 +112,6 @@ public:
     {
         printIndent(os, indent);
         os << "(" << fIndex << ")\n";
-        check[fIndex] = 1;
     }
 
 private:
@@ -122,6 +135,21 @@ public:
             triangles[i] = nullptr;
         }
     }
+
+    static TriangleList* getTriangleList()
+    {
+		TriangleList* list = TriangleList::allocate();
+		if (list == nullptr) return nullptr;
+		list->initialize();
+		return list;
+    }
+
+    static void returnTriangleList(TriangleList* list)
+	{
+		if (list == nullptr) return;
+		list->initialize(); // Reset the list
+		TriangleList::deallocate(list);
+	}
 
     bool isFull() const { return triangleCount == TOTAL_ELEMENT_COUNT; }
 
@@ -171,8 +199,22 @@ public:
 
         if(bIsLeaf)
         {
-            data = TriangleList::allocate();
+            data = TriangleList::getTriangleList();
         }
+    }
+
+	static OctNode* getOctNode(const BoundingBox3f& _bbox, int _depth, bool _bIsLeaf)
+	{
+		OctNode* node = OctNode::allocate();
+		if (node == nullptr) return nullptr;
+		node->initialize(_bbox, _depth, _bIsLeaf); // Initialize with default values
+		return node;
+	}
+
+    static void returnOctNode(OctNode* node)
+    {
+		if (node == nullptr) return;
+		OctNode::deallocate(node);      
     }
 
     bool hasData() const
@@ -197,7 +239,7 @@ public:
 
             if(!hasData())
             {
-                data = TriangleList::allocate();
+                data = TriangleList::getTriangleList();
                 if(!data) return false;
             }
 
@@ -225,10 +267,9 @@ public:
 
         if (children[index] != nullptr) return; // Child already exists
 
-        OctNode* newNode = OctNode::allocate();
+        OctNode* newNode = OctNode::getOctNode(childBbox, depth + 1, true);
         if (newNode == nullptr) return;
 
-        newNode->initialize(childBbox, depth + 1, true);
         children[index] = newNode;
     }
 
@@ -240,10 +281,9 @@ public:
 
         BoundingBox3f childBbox = getOctSubcell(bbox, index);
 
-        OctNode* newNode = OctNode::allocate();
+        OctNode* newNode = OctNode::getOctNode(childBbox, depth + 1, true);
         if (newNode == nullptr) return;
 
-        newNode->initialize(childBbox, depth + 1, true);
         children[index] = newNode;
     }
 
@@ -252,7 +292,7 @@ public:
         data->foreachEl([this](const Triangle& triangle) {
             this->pushToChildren(triangle);
         });
-        TriangleList::deallocate(data);
+        TriangleList::returnTriangleList(data);
         data = nullptr;
     }
 
