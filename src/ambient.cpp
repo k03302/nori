@@ -1,5 +1,7 @@
 #include <nori/integrator.h>
 #include <nori/scene.h>
+#include <nori/warp.h>
+#include <nori/frame.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -17,11 +19,20 @@ public:
         Intersection its;
         if (!scene->rayIntersect(ray, its))
             return Color3f(0.0f);
+        
 
-        /* Return the component-wise absolute
-           value of the shading normal as a color */
-        Normal3f n = its.shFrame.n.cwiseAbs();
-        return Color3f(n.x(), n.y(), n.z());
+		auto sampleLocal = Warp::squareToCosineHemisphere(
+			sampler->next2D());
+		auto hemisphereFrame = Frame(its.shFrame.n);
+        auto sampleWorld = hemisphereFrame.toWorld(sampleLocal);
+        sampleWorld.normalize();
+        Ray3f shadowRay(its.p, sampleWorld);
+
+        if(scene->rayIntersect(shadowRay))
+			return Color3f(0.0f);
+        
+		float cosTheta = its.shFrame.n.dot(sampleWorld);
+        return Color3f(cosTheta / EIGEN_PI);
     }
 
     std::string toString() const
