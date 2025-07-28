@@ -108,6 +108,16 @@ add_executable(warptest
   src/common.cpp
 )
 
+add_executable(ntreetest
+  test/ntreetest.cpp
+  include/nori/ntree.h
+)
+
+enable_testing()
+
+add_test(NAME ntreetest COMMAND ntreetest)
+
+
 if (WIN32)
   target_link_libraries(nori tbb_static pugixml IlmImf nanogui ${NANOGUI_EXTRA_LIBS} zlibstatic)
 else()
