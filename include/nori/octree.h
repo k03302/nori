@@ -195,6 +195,18 @@ public:
         }
     }
 
+    const int getTriangleCount() const
+    {
+        return triangleCount;
+    }
+
+    const Triangle *getTriangle(int index) const
+    {
+        if (index < 0 || index >= triangleCount)
+            return nullptr; // Invalid index
+        return triangles[index];
+    }
+
 private:
     const Triangle *triangles[TOTAL_ELEMENT_COUNT];
     int triangleCount;

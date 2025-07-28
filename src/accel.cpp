@@ -77,23 +77,33 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
         if (octNode->isLeaf())
         {
-            if (octNode->hasData())
+            auto data = octNode->getData();
+            if (data != nullptr && data->getTriangleCount() > 0)
             {
-                octNode->getData()->foreachEl([&](const Triangle &triangle)
-                                              {
-					if (triangle.mesh->rayIntersect(triangle.fIndex, ray, u, v, t)) {
-						/* An intersection was found! Can terminate
-						   immediately if this is a shadow ray query */
-						if (shadowRay)
-							return true;
-						if (t < ray.maxt) {
-							ray.maxt = its.t = t;
-							its.uv = Point2f(u, v);
-							its.mesh = triangle.mesh;
-							f = triangle.fIndex;
-							foundIntersection = true;
-						}
-					} });
+                // Iterate through all triangles in this node
+                // and check for intersections
+                for (int i = 0; i < data->getTriangleCount(); i++)
+                {
+                    const Triangle *triangle = data->getTriangle(i);
+                    if (triangle != nullptr)
+                    {
+                        if (triangle->mesh->rayIntersect(triangle->fIndex, ray, u, v, t))
+                        {
+                            /* An intersection was found! Can terminate
+                               immediately if this is a shadow ray query */
+                            if (shadowRay)
+                                return true;
+                            if (t < ray.maxt)
+                            {
+                                ray.maxt = its.t = t;
+                                its.uv = Point2f(u, v);
+                                its.mesh = triangle->mesh;
+                                f = triangle->fIndex;
+                                foundIntersection = true;
+                            }
+                        }
+                    }
+                }
             }
         }
         else
