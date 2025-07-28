@@ -25,13 +25,5 @@ rules.ninja
 *.opendb
 Debug
 x64
-/scenes/pa3/ajax.obj
-/scenes/pa3/ajax-simple.exr
-/scenes/pa3/ajax-simple.png
-/scenes/pa3/ajax-ao.exr
-/scenes/pa3/bunny-simple.exr
-/scenes/pa3/bunny-simple.png
 
-/scenes/pa2/ajax.obj
-/scenes/pa1/bunny.png
-/scenes/pa1/bunny.exr
+scenes/**
