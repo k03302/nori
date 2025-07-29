@@ -65,7 +65,7 @@ add_executable(nori
   include/nori/vector.h
   include/nori/warp.h
   include/nori/octree.h
-  include/nori/lenna.h
+  include/nori/imgwarp.h
   include/nori/ntree.h
 
   # Source code files
@@ -110,14 +110,14 @@ add_executable(warptest
   src/common.cpp
 )
 
-add_executable(ntreetest
-  test/ntreetest.cpp
-  include/nori/ntree.h
+add_executable(imgwarptest
+  test/imgwarp.cpp
+  include/nori/imgwarp.h
 )
 
 enable_testing()
 
-add_test(NAME ntreetest COMMAND ntreetest)
+add_test(NAME imgwarptest COMMAND imgwarptest)
 
 
 if (WIN32)

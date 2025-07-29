@@ -7,7 +7,7 @@
 #include <nori/warp.h>
 #include <nori/bsdf.h>
 #include <nori/vector.h>
-#include <nori/lenna.h>
+#include <nori/imgwarp.h>
 #include <nanogui/screen.h>
 #include <nanogui/label.h>
 #include <nanogui/window.h>
