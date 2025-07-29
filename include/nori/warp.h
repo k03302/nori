@@ -55,6 +55,10 @@ public:
 
     /// Probability density of \ref squareToBeckmann()
     static float squareToBeckmannPdf(const Vector3f &m, float alpha);
+
+    static Vector2f squareToLenna(const Point2f& sample);
+
+    static float squareToLennaPdf(const Point2f& p);
 };
 
 NORI_NAMESPACE_END

@@ -7,7 +7,6 @@
 #include <nori/warp.h>
 #include <nori/bsdf.h>
 #include <nori/vector.h>
-#include <nori/imgwarp.h>
 #include <nanogui/screen.h>
 #include <nanogui/label.h>
 #include <nanogui/window.h>
@@ -75,12 +74,13 @@ enum WarpType : int
     CosineHemisphere,
     Beckmann,
     MicrofacetBRDF,
-    WarpTypeCount
+    Image,
+    WarpTypeCount,
 };
 
 static const std::string kWarpTypeNames[WarpTypeCount] = {
     "square", "tent", "disk", "uniform_sphere", "uniform_hemisphere",
-    "cosine_hemisphere", "beckmann", "microfacet_brdf"};
+    "cosine_hemisphere", "beckmann", "microfacet_brdf", "lenna image"};
 
 struct WarpTest
 {
@@ -126,7 +126,7 @@ struct WarpTest
             nori::Vector3f sample = points.col(i);
             float x, y;
 
-            if (warpType == Square)
+            if (warpType == Square || warpType == Image)
             {
                 x = sample.x();
                 y = sample.y();
@@ -154,6 +154,10 @@ struct WarpTest
             if (warpType == Square)
             {
                 return Warp::squareToUniformSquarePdf(Point2f(x, y));
+            }
+            else if (warpType == Image)
+            {
+				return Warp::squareToLennaPdf(Point2f(x, y));
             }
             else if (warpType == Disk)
             {
@@ -203,7 +207,7 @@ struct WarpTest
         };
 
         double scale = sampleCount;
-        if (warpType == Square)
+        if (warpType == Square || warpType == Image)
             scale *= 1;
         else if (warpType == Disk || warpType == Tent)
             scale *= 4;
@@ -248,6 +252,9 @@ struct WarpTest
         case Square:
             result << Warp::squareToUniformSquare(sample), 0;
             break;
+		case Image:
+			result << Warp::squareToLenna(sample), 0;
+			break;
         case Tent:
             result << Warp::squareToTent(sample), 0;
             break;
@@ -797,7 +804,7 @@ public:
 
         new Label(m_window, "Warping method", "sans-bold");
         m_warpTypeBox = new ComboBox(m_window, {"Square", "Tent", "Disk", "Sphere", "Hemisphere (unif.)",
-                                                "Hemisphere (cos)", "Beckmann distr.", "Microfacet BRDF"});
+                                                "Hemisphere (cos)", "Beckmann distr.", "Microfacet BRDF", "Image"});
         m_warpTypeBox->set_callback([&](int)
                                     { refresh(); });
 

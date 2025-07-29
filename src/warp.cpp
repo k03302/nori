@@ -7,6 +7,7 @@
 #include <nori/warp.h>
 #include <nori/vector.h>
 #include <nori/frame.h>
+#include <nori/imgwarp.h>
 
 NORI_NAMESPACE_BEGIN
 
@@ -119,6 +120,17 @@ float Warp::squareToBeckmannPdf(const Vector3f &m, float alpha)
     beckmann /= alpha_sq * cos_theta * cos_theta_sq;
     beckmann /= 2 * EIGEN_PI;
     return beckmann;
+}
+
+ImageWarp lennaWarp("../assets/lenna.png", 9);
+Vector2f Warp::squareToLenna(const Point2f &sample)
+{
+    return lennaWarp.squareToImage(sample);
+}
+
+float Warp::squareToLennaPdf(const Point2f &p)
+{
+    return lennaWarp.squareToImagePdf(p);
 }
 
 NORI_NAMESPACE_END
