@@ -10,7 +10,6 @@
 #include <nori/emitter.h>
 #include <nori/warp.h>
 #include <Eigen/Geometry>
-#include "mesh.h"
 
 NORI_NAMESPACE_BEGIN
 
