@@ -40,7 +40,7 @@ public:
         calculateSumTable();
     }
 
-	ImageWarp(const std::string& filename, int _maxDepth) : maxDepth(_maxDepth)
+    ImageWarp(const std::string &filename, int _maxDepth) : maxDepth(_maxDepth)
     {
         stbi_set_flip_vertically_on_load(true);
         image = stbi_load(filename.c_str(), &width, &height, &channels, 0);
@@ -64,7 +64,8 @@ public:
             }
         }
 
-		totalColorSum = sumTable[width - 1][height - 1];
+        totalColorSum = sumTable[width - 1][height - 1];
+        averageColorSum = totalColorSum / (width * height);
     }
 
     float getColorSum(int x, int y)
@@ -181,8 +182,9 @@ public:
 
     float squareToImagePdf(const Point2f &p)
     {
-        if(totalColorSum > 0) return getColorSum(p) / totalColorSum;
-		return 0.0f;
+        if (averageColorSum > 0)
+            return getColorSum(p) / averageColorSum;
+        return 0.0f;
     }
 
 private:
@@ -191,7 +193,8 @@ private:
     int maxDepth;
     const static int MAX_DEPTH = 10; // Maximum depth for the quadtree, adjust as needed
     float sumTable[1 << MAX_DEPTH][1 << MAX_DEPTH];
-	float totalColorSum;
+    float totalColorSum;
+    float averageColorSum;
 };
 
 NORI_NAMESPACE_END
