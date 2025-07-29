@@ -29,45 +29,6 @@ struct ValidationData
 	bool m_isValid;
 };
 
-template <typename NodeType, unsigned int ChildCount, unsigned int Depth> class NTree;
-
-template <typename NodeType, unsigned int ChildCount, unsigned int Depth>
-class NTreeVisitor
-{
-public:
-	NTreeVisitor(NTree<NodeType, ChildCount, Depth>* ntree)
-		: m_tree(ntree), m_depth(0), m_nodeIndex(0)
-	{
-		static_assert(std::is_base_of<ValidationData, NodeType>::value, "NodeType must inherit from BaseNode");
-		static_assert(isPowerOfTwo(ChildCount));
-		static_assert(nodesAvailable < std::numeric_limits<int>::max());
-	}
-
-	void visitParent()
-	{
-		if (m_depth == 0) {
-			throw std::out_of_range("Already at root, cannot visit parent");
-		}
-		m_nodeIndex = (m_nodeIndex - 1) / ChildCount;
-	}
-
-	void visitChild(int childIndex)
-	{
-		if (m_depth >= Depth || childIndex < 0 || childIndex >= ChildCount) {
-			throw std::out_of_range("Invalid child index or depth exceeded");
-		}
-		m_nodeIndex = m_nodeIndex * ChildCount + childIndex;
-		m_depth++;
-	}
-
-
-
-private:
-	NTree<NodeType, ChildCount, Depth>* m_tree;
-	static constexpr int shiftCount = log2(ChildCount);
-	int m_depth;
-	int m_nodeIndex;
-};
 
 
 template <typename NodeType, unsigned int ChildCount, unsigned int Depth>
@@ -80,7 +41,32 @@ public:
 		static_assert(nodesAvailable < std::numeric_limits<int>::max());
 	}
 
-	
+	const NodeType& getNode(int nodeIndex)
+	{
+		if (nodeIndex < 0 || nodeIndex >= nodesAvailable) {
+			throw std::out_of_range("Node index out of range");
+		}
+		return m_nodes[nodeIndex];
+	}
+
+	static int getParentNode(int nodeIndex)
+	{
+		if (nodeIndex < 0 || nodeIndex >= nodesAvailable) {
+			throw std::out_of_range("Node index out of range");
+		}
+		return (nodeIndex - 1) / ChildCount;
+	}
+
+	static int getChildNode(int parentIndex, int childIndex)
+	{
+		if (parentIndex < 0 || parentIndex >= nodesAvailable) {
+			throw std::out_of_range("Parent index out of range");
+		}
+		if (childIndex < 0 || childIndex >= ChildCount) {
+			throw std::out_of_range("Child index out of range");
+		}
+		return parentIndex * ChildCount + childIndex + 1;
+	}
 
 public:
 	static constexpr int nodesAvailable = power(ChildCount, Depth);
