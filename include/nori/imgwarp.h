@@ -2,7 +2,6 @@
 
 #include <nori/common.h>
 #include <nori/sampler.h>
-#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 #include <nori/ntree.h>
 #include <nori/bbox.h>
@@ -34,8 +33,17 @@ class ImageWarp
 public:
     ImageWarp(const std::string &filename)
     {
+        stbi_set_flip_vertically_on_load(true);
         image = stbi_load(filename.c_str(), &width, &height, &channels, 0);
         maxDepth = static_cast<int>(std::ceil(std::max(std::log2(width), std::log2(height))));
+        maxDepth = std::max(1, maxDepth - 2);
+        calculateSumTable();
+    }
+
+	ImageWarp(const std::string& filename, int _maxDepth) : maxDepth(_maxDepth)
+    {
+        stbi_set_flip_vertically_on_load(true);
+        image = stbi_load(filename.c_str(), &width, &height, &channels, 0);
         calculateSumTable();
     }
 
@@ -55,6 +63,8 @@ public:
                     sumTable[i][j] = sumTable[i - 1][j] + sumTable[i][j - 1] - sumTable[i - 1][j - 1] + getColorSum(i, j);
             }
         }
+
+		totalColorSum = sumTable[width - 1][height - 1];
     }
 
     float getColorSum(int x, int y)
@@ -123,11 +133,11 @@ public:
         // if at maximum depth return the warped sample position
         if (depth >= maxDepth)
         {
-			Vector2f imgAreaSize = imgArea.max - imgArea.min;
+            Vector2f imgAreaSize = imgArea.max - imgArea.min;
             Vector2f sampleAreaSize = sampleArea.max - sampleArea.min;
-			return imgArea.min + imgAreaSize.cwiseProduct(
-				Vector2f((sample.x() - sampleArea.min.x()) / sampleAreaSize.x(),
-					(sample.y() - sampleArea.min.y()) / sampleAreaSize.y()));
+            return imgArea.min + imgAreaSize.cwiseProduct(
+                                     Vector2f((sample.x() - sampleArea.min.x()) / sampleAreaSize.x(),
+                                              (sample.y() - sampleArea.min.y()) / sampleAreaSize.y()));
         }
 
         Point2f imgAreaCenter = imgArea.getCenter();
@@ -142,8 +152,17 @@ public:
 
         float totalColorSum = colorSum[0] + colorSum[1] + colorSum[2] + colorSum[3];
 
-        float upperColorSum = colorSum[0] + colorSum[1];
-        float leftColorSum = colorSum[0] + colorSum[2];
+        if (totalColorSum == 0)
+        {
+            Vector2f imgAreaSize = imgArea.max - imgArea.min;
+            Vector2f sampleAreaSize = sampleArea.max - sampleArea.min;
+            return imgArea.min + imgAreaSize.cwiseProduct(
+                                     Vector2f((sample.x() - sampleArea.min.x()) / sampleAreaSize.x(),
+                                              (sample.y() - sampleArea.min.y()) / sampleAreaSize.y()));
+        }
+
+        float upperColorSum = colorSum[0] + colorSum[2];
+        float leftColorSum = colorSum[0] + colorSum[1];
 
         Vector2f sampleCenterRatio = Vector2f(upperColorSum / totalColorSum, leftColorSum / totalColorSum);
 
@@ -162,15 +181,17 @@ public:
 
     float squareToImagePdf(const Point2f &p)
     {
-        return getColorSum(p) / sumTable[(1 << maxDepth) - 1][(1 << maxDepth) - 1];
+        if(totalColorSum > 0) return getColorSum(p) / totalColorSum;
+		return 0.0f;
     }
 
 private:
     unsigned char *image;
     int width, height, channels;
     int maxDepth;
-	const static int MAX_DEPTH = 10; // Maximum depth for the quadtree, adjust as needed
+    const static int MAX_DEPTH = 10; // Maximum depth for the quadtree, adjust as needed
     float sumTable[1 << MAX_DEPTH][1 << MAX_DEPTH];
+	float totalColorSum;
 };
 
 NORI_NAMESPACE_END
