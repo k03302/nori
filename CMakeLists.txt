@@ -102,6 +102,7 @@ add_definitions(${NANOGUI_EXTRA_DEFS})
 # The following lines build the warping test application
 add_executable(warptest
   include/nori/warp.h
+  include/nori/imgwarp.h
   src/warp.cpp
   src/warptest.cpp
   src/microfacet.cpp
