@@ -7,7 +7,7 @@
 #pragma once
 
 #include <nori/mesh.h>
-#include <nori/octree.h>
+#include <nori/ntree.h>
 NORI_NAMESPACE_BEGIN
 
 /**
@@ -16,7 +16,8 @@ NORI_NAMESPACE_BEGIN
  * The current implementation falls back to a brute force loop
  * through the geometry.
  */
-class Accel {
+class Accel
+{
 public:
     /**
      * \brief Register a triangle mesh for inclusion in the acceleration
@@ -54,9 +55,10 @@ public:
     bool rayIntersect(const Ray3f &ray, Intersection &its, bool shadowRay) const;
 
 private:
-    Mesh         *m_mesh = nullptr; ///< Mesh (only a single one for now)
-    BoundingBox3f m_bbox;           ///< Bounding box of the entire scene
-	OctNode      *m_root = nullptr; ///< Root node of the octree 
+    std::vector<Mesh *> m_meshes; ///< List of meshes in the scene
+    BoundingBox3f m_bbox;         ///< Bounding box of the entire scene
+
+    // OctNode *m_root = nullptr;    ///< Root node of the octree
 };
 
 NORI_NAMESPACE_END
