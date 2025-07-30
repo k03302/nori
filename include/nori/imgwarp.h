@@ -3,7 +3,6 @@
 #include <nori/common.h>
 #include <nori/sampler.h>
 #include <stb_image.h>
-#include <nori/ntree.h>
 #include <nori/bbox.h>
 
 NORI_NAMESPACE_BEGIN
