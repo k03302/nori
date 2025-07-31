@@ -96,8 +96,6 @@ add_executable(nori
   src/simple.cpp
   src/ambient.cpp
   src/area.cpp
-  src/whitted.cpp
-  src/ntree.cpp
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
