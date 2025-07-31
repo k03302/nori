@@ -422,6 +422,107 @@ private:
     bool bIsLeaf = false;
 };
 
+class Octree
+{
+public:
+    Octree(const BoundingBox3f &bbox)
+        : m_bbox(bbox)
+    {
+        m_root = OctNode::getOctNode(bbox, 0, true);
+    }
+
+    void addMesh(Mesh *mesh)
+    {
+        if (mesh == nullptr)
+            return;
+        for (uint32_t i = 0; i < mesh->getTriangleCount(); i++)
+        {
+            Triangle *triangle = Triangle::getTriangle(i, mesh);
+            m_root->push(*triangle);
+        }
+    }
+
+    void print(std::ostream &os, int indent) const
+    {
+        if (m_root)
+        {
+            m_root->print(os, indent);
+        }
+        else
+        {
+            printIndent(os, indent);
+            os << "Octree is empty\n";
+        }
+    }
+
+    bool rayIntersect(Ray3f &ray, Intersection &its, uint32_t &fIndex, bool shadowRay)
+    {
+        float u, v, t;
+
+        bool foundIntersection = false;
+        std::queue<OctNode *> queue;
+        queue.push(m_root);
+        for (; !queue.empty(); queue.pop())
+        {
+            auto octNode = queue.front();
+            if (octNode == nullptr)
+                break;
+
+            if (octNode->isLeaf())
+            {
+                auto data = octNode->getData();
+                if (data != nullptr && data->getTriangleCount() > 0)
+                {
+                    // Iterate through all triangles in this node
+                    // and check for intersections
+                    for (int i = 0; i < data->getTriangleCount(); i++)
+                    {
+                        const Triangle *triangle = data->getTriangle(i);
+                        if (triangle != nullptr)
+                        {
+                            if (triangle->mesh->rayIntersect(triangle->fIndex, ray, u, v, t))
+                            {
+                                /* An intersection was found! Can terminate
+                                   immediately if this is a shadow ray query */
+                                if (shadowRay)
+                                    return true;
+                                if (t < ray.maxt)
+                                {
+                                    ray.maxt = its.t = t;
+                                    its.uv = Point2f(u, v);
+                                    its.mesh = triangle->mesh;
+                                    fIndex = triangle->fIndex;
+                                    foundIntersection = true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else
+            {
+                for (int i = 0; i < 8; i++)
+                {
+                    auto child = octNode->getChild(i);
+                    float nearT, farT;
+                    if (child == nullptr)
+                        continue;
+                    if (child->getBoundingBox().rayIntersect(ray, nearT, farT) && ray.maxt > nearT)
+                    {
+                        queue.push(child);
+                    }
+                }
+            }
+        }
+
+        return foundIntersection;
+    }
+
+private:
+    OctNode *m_root = nullptr;
+    BoundingBox3f m_bbox; ///< Bounding box of the entire octree
+};
+
 template <>
 int StackAllocator<Triangle, TOTAL_TRIANGLE_COUNT>::currentCount = 0;
 template <>
