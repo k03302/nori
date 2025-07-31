@@ -15,6 +15,11 @@ public:
         return "Area[]";
     }
 
+    Color3f Le(const Ray3f &ray) const override
+    {
+        return m_radiance;
+    }
+
 private:
     Color3f m_radiance;
 };
