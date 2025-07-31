@@ -66,7 +66,6 @@ add_executable(nori
   include/nori/warp.h
   include/nori/octree.h
   include/nori/imgwarp.h
-  include/nori/ntree.h
 
   # Source code files
   src/bitmap.cpp
