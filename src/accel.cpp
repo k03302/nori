@@ -6,6 +6,7 @@
 
 #include <nori/accel.h>
 #include <Eigen/Geometry>
+#include <nori/octree.h>
 
 NORI_NAMESPACE_BEGIN
 
