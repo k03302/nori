@@ -50,13 +50,25 @@ void Mesh::sampleTriangle(uint32_t f_index, const Point2f &sample, Point3f &p, V
     float b = sample.y() * std::sqrt(1.0 - sample.x());
     float r = 1.0 - a - b;
 
-    p = m_V.col(m_F(0, f_index)) * a +
-        m_V.col(m_F(1, f_index)) * b +
-        m_V.col(m_F(2, f_index)) * r;
+    int i = m_F(0, f_index);
+    int j = m_F(1, f_index);
+    int k = m_F(2, f_index);
 
-    n = m_N.col(m_F(0, f_index)) * a +
-        m_N.col(m_F(1, f_index)) * b +
-        m_N.col(m_F(2, f_index)) * r;
+    Vector3f u = m_V.col(i);
+    Vector3f v = m_V.col(j);
+    Vector3f w = m_V.col(k);
+
+    p = u * a + v * b + w * r;
+    if (m_N.size() > 0)
+    {
+        n = m_N.col(i) * a + m_N.col(j) * b + m_N.col(k) * r;
+        n.normalize();
+    }
+    else
+    {
+        n = (v - u).cross(w - u);
+        n.normalize();
+    }
 }
 
 void Mesh::sampleSurface(const Point2f &sample, Point3f &p, Vector3f &n)
@@ -65,9 +77,8 @@ void Mesh::sampleSurface(const Point2f &sample, Point3f &p, Vector3f &n)
     {
         initSurfacePdf();
     }
-    float fSample = sample.x();
-    size_t index = m_surfacePdf.sample(fSample);
-    sampleTriangle((uint32_t)index, fSample, p, n);
+    size_t index = m_surfacePdf.sample(sample.x());
+    sampleTriangle((uint32_t)index, sample, p, n);
 }
 
 float Mesh::surfaceArea(uint32_t index) const
