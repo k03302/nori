@@ -7,7 +7,6 @@
 #pragma once
 
 #include <nori/mesh.h>
-#include <nori/ntree.h>
 NORI_NAMESPACE_BEGIN
 
 /**

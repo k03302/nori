@@ -11,7 +11,7 @@
 
 NORI_NAMESPACE_BEGIN
 
-static Octree<8> octree;
+Octree<2> octree;
 
 void Accel::addMesh(Mesh *mesh)
 {
@@ -23,20 +23,8 @@ void Accel::addMesh(Mesh *mesh)
 
 void Accel::build()
 {
-    // m_root = OctNode::getOctNode(m_bbox, 0, true);
-    // if (!m_root)
-    //     return;
-    // for (const auto &mesh : m_meshes)
-    // {
-    //     for (uint32_t i = 0; i < mesh->getTriangleCount(); i++)
-    //     {
-    //         Triangle *triangle = Triangle::getTriangle(i, mesh);
-    //         if (triangle == nullptr)
-    //             return;
-    //         m_root->push(*triangle);
-    //     }
-    // }
     octree.build(m_meshes);
+    octree.printStatistic();
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
@@ -46,85 +34,9 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
 
-    // foundIntersection = g_octree.rayIntersect(ray, its, f, shadowRay);
+	foundIntersection = octree.rayIntersect(ray, its, f, shadowRay);
+    if (shadowRay) return foundIntersection;
 
-    // if (shadowRay && foundIntersection)
-    //     return true;
-
-    // /* Brute force search through all triangles */
-    // for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx)
-    // {
-    //     float u, v, t;
-    //     if (m_mesh->rayIntersect(idx, ray, u, v, t))
-    //     {
-    //         /* An intersection was found! Can terminate
-    //            immediately if this is a shadow ray query */
-    //         if (shadowRay)
-    //             return true;
-    //         ray.maxt = its.t = t;
-    //         its.uv = Point2f(u, v);
-    //         its.mesh = m_mesh;
-    //         f = idx;
-    //         foundIntersection = true;
-    //     }
-    // }
-
-    // float u, v, t;
-
-    // std::queue<OctNode *> queue;
-    // queue.push(m_root);
-    // for (; !queue.empty(); queue.pop())
-    // {
-    //     auto octNode = queue.front();
-    //     if (octNode == nullptr)
-    //         break;
-
-    //     if (octNode->isLeaf())
-    //     {
-    //         auto data = octNode->getData();
-    //         if (data != nullptr && data->getTriangleCount() > 0)
-    //         {
-    //             // Iterate through all triangles in this node
-    //             // and check for intersections
-    //             for (int i = 0; i < data->getTriangleCount(); i++)
-    //             {
-    //                 const Triangle *triangle = data->getTriangle(i);
-    //                 if (triangle != nullptr)
-    //                 {
-    //                     if (triangle->mesh->rayIntersect(triangle->fIndex, ray, u, v, t))
-    //                     {
-    //                         /* An intersection was found! Can terminate
-    //                            immediately if this is a shadow ray query */
-    //                         if (shadowRay)
-    //                             return true;
-    //                         if (t < ray.maxt)
-    //                         {
-    //                             ray.maxt = its.t = t;
-    //                             its.uv = Point2f(u, v);
-    //                             its.mesh = triangle->mesh;
-    //                             f = triangle->fIndex;
-    //                             foundIntersection = true;
-    //                         }
-    //                     }
-    //                 }
-    //             }
-    //         }
-    //     }
-    //     else
-    //     {
-    //         for (int i = 0; i < 8; i++)
-    //         {
-    //             auto child = octNode->getChild(i);
-    //             float nearT, farT;
-    //             if (child == nullptr)
-    //                 continue;
-    //             if (child->getBoundingBox().rayIntersect(ray, nearT, farT) && ray.maxt > nearT)
-    //             {
-    //                 queue.push(child);
-    //             }
-    //         }
-    //     }
-    // }
 
     if (foundIntersection)
     {
