@@ -42,30 +42,54 @@ public:
                 if (!m->isEmitter() || m == mesh)
                     continue;
                 const Emitter *emitter = m->getEmitter();
-                Point3f p;
-                Vector3f n;
-                emitter->sampleSurface(sampler->next2D(), p, n);
+                if (bsdf->isDiffuse())
+                {
+                    Point3f p;
+                    Vector3f n;
+                    emitter->sampleSurface(sampler->next2D(), p, n);
 
-                Vector3f incident = its.p - p; // vector from emitter to intersection
-                float distance = incident.norm();
-                Vector3f incidentDir = incident / distance;
+                    // Incident vector
+                    Vector3f incident = p - its.p;
+                    float distance = incident.norm();
+                    Vector3f incidentDir = incident / distance;
 
-                // Check if sampled point is occluded
-                Ray3f shadowRay(p, incidentDir);
-                shadowRay.maxt = distance - Epsilon;
-                if (scene->rayIntersect(shadowRay))
-                    continue;
-                Vector3f reflect = ray.o - its.p; // vector from intersection to ray origin
-                Vector3f reflectDir = reflect.normalized();
+                    // Check if sampled point is occluded
+                    Ray3f shadowRay(p, -incidentDir);
+                    shadowRay.maxt = distance - Epsilon;
+                    if (scene->rayIntersect(shadowRay))
+                        continue;
 
-				Frame itsFrame(its.shFrame.n);
-                BSDFQueryRecord query(itsFrame.toLocal(-incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
-                Color3f reflectance = bsdf->eval(query);
+                    // Reflection vector
+                    Vector3f reflect = ray.o - its.p;
+                    Vector3f reflectDir = reflect.normalized();
 
-                result = reflectance * emitter->Le(shadowRay);
-                result *= std::max(0.0f, its.shFrame.n.dot(-incidentDir));
-                result *= std::max(0.0f, n.dot(incidentDir));
-                result /= distance * distance;
+                    Color3f reflectance = Color3f(0.0f);
+                    Frame itsFrame(its.shFrame.n);
+                    BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
+                    reflectance = bsdf->eval(query);
+
+                    Color3f li = reflectance * emitter->Le(shadowRay);
+                    li *= std::max(0.0f, its.shFrame.n.dot(incidentDir));
+                    li *= std::max(0.0f, n.dot(-incidentDir));
+                    li /= distance * distance;
+
+                    result += li;
+                }
+                else
+                {
+					Frame itsFrame(its.shFrame.n);
+                    Vector3f incident = ray.o - its.p;
+					Vector3f incidentDir = incident.normalized();
+                    BSDFQueryRecord query(itsFrame.toLocal(incidentDir));
+					Color3f sample = bsdf->sample(query, sampler->next2D());
+					if (sample.isZero())
+						continue;
+					// Reflection vector
+					Vector3f reflectDir = itsFrame.toWorld(query.wo);
+
+					Ray3f reflectRay(its.p, reflectDir);
+                    result += Li(scene, sampler, reflectRay);
+                }
             }
         }
 
