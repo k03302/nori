@@ -75,7 +75,7 @@ public:
 
                     result += li;
                 }
-                else
+                else if(sampler->next1D() < 0.95f)
                 {
 					Frame itsFrame(its.shFrame.n);
                     Vector3f incident = ray.o - its.p;
@@ -88,7 +88,8 @@ public:
 					Vector3f reflectDir = itsFrame.toWorld(query.wo);
 
 					Ray3f reflectRay(its.p, reflectDir);
-                    result += Li(scene, sampler, reflectRay);
+
+                    result += (1.0f / 0.95f) * Li(scene, sampler, reflectRay);
                 }
             }
         }
