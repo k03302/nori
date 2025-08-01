@@ -6,40 +6,29 @@
 
 #include <nori/accel.h>
 #include <Eigen/Geometry>
-#include <queue>
+#include <nori/octree.h>
 
 NORI_NAMESPACE_BEGIN
 
 void Accel::addMesh(Mesh *mesh)
 {
-    if (m_mesh)
-        throw NoriException("Accel: only a single mesh is supported!");
-    m_mesh = mesh;
-    m_bbox = m_mesh->getBoundingBox();
+    if (mesh == nullptr)
+    {
+        return;
+    }
+    m_meshes.push_back(mesh);
+    m_bbox.expandBy(mesh->getBoundingBox());
 }
 
 void Accel::build()
 {
-    m_root = OctNode::getOctNode(m_bbox, 0, true);
-    if (!m_root)
-        return;
-
-    std::cout << m_mesh->getTriangleCount() << " triangles" << std::endl;
-
-    for (uint32_t i = 0; i < m_mesh->getTriangleCount(); i++)
+    m_octree = new Octree(m_bbox);
+    for (auto &mesh : m_meshes)
     {
-        Triangle *triangle = Triangle::getTriangle(i, m_mesh);
-        if (triangle == nullptr)
-            return;
-        m_root->push(*triangle);
-        /*std::cout << '\r' << "Pushed triangle " << i + 1 << " of "
-            << m_mesh->getTriangleCount() << " triangles" << std::flush
-            << OctNode::getCurrentCount() << ", "
-            << TriangleList::getCurrentCount() << ", "
-            << Triangle::getCurrentCount() << std::flush;*/
+        m_octree->addMesh(mesh);
     }
 
-    // m_root->print(std::cout, 0);
+    // m_octree->print(std::cout, 0);
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
@@ -48,6 +37,10 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     uint32_t f = (uint32_t)-1;      // Triangle index of the closest intersection
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
+
+    foundIntersection = m_octree->rayIntersect(ray, its, f, shadowRay);
+    if (shadowRay)
+        return foundIntersection;
 
     ///* Brute force search through all triangles */
     // for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
@@ -64,63 +57,6 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     //         foundIntersection = true;
     //     }
     // }
-
-    float u, v, t;
-
-    std::queue<OctNode *> queue;
-    queue.push(m_root);
-    for (; !queue.empty(); queue.pop())
-    {
-        auto octNode = queue.front();
-        if (octNode == nullptr)
-            break;
-
-        if (octNode->isLeaf())
-        {
-            auto data = octNode->getData();
-            if (data != nullptr && data->getTriangleCount() > 0)
-            {
-                // Iterate through all triangles in this node
-                // and check for intersections
-                for (int i = 0; i < data->getTriangleCount(); i++)
-                {
-                    const Triangle *triangle = data->getTriangle(i);
-                    if (triangle != nullptr)
-                    {
-                        if (triangle->mesh->rayIntersect(triangle->fIndex, ray, u, v, t))
-                        {
-                            /* An intersection was found! Can terminate
-                               immediately if this is a shadow ray query */
-                            if (shadowRay)
-                                return true;
-                            if (t < ray.maxt)
-                            {
-                                ray.maxt = its.t = t;
-                                its.uv = Point2f(u, v);
-                                its.mesh = triangle->mesh;
-                                f = triangle->fIndex;
-                                foundIntersection = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        else
-        {
-            for (int i = 0; i < 8; i++)
-            {
-                auto child = octNode->getChild(i);
-                float nearT, farT;
-                if (child == nullptr)
-                    continue;
-                if (child->getBoundingBox().rayIntersect(ray, nearT, farT) && ray.maxt > nearT)
-                {
-                    queue.push(child);
-                }
-            }
-        }
-    }
 
     if (foundIntersection)
     {

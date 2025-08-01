@@ -66,7 +66,6 @@ add_executable(nori
   include/nori/warp.h
   include/nori/octree.h
   include/nori/imgwarp.h
-  include/nori/ntree.h
 
   # Source code files
   src/bitmap.cpp
@@ -95,6 +94,8 @@ add_executable(nori
   src/octree.cpp
   src/simple.cpp
   src/ambient.cpp
+  src/area.cpp
+  src/whitted.cpp
 )
 
 add_definitions(${NANOGUI_EXTRA_DEFS})
