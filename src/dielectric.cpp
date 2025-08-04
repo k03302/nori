@@ -38,11 +38,14 @@ public:
     Color3f sample(BSDFQueryRecord &bRec, const Point2f &sample) const
     {
         bRec.measure = EDiscrete;
-        float eta = bRec.eta = m_extIOR / m_intIOR;
-
         float cosThetaI = Frame::cosTheta(bRec.wi);
-        float reflection_r = fresnel(cosThetaI, m_extIOR, m_intIOR);
-        float transmission_r = 1.0f - reflection_r;
+
+        float eta;
+        float reflection_r, transmission_r;
+
+        eta = (cosThetaI > 0.0f) ? (m_extIOR / m_intIOR) : (m_intIOR / m_extIOR);
+        reflection_r = fresnel(cosThetaI, m_extIOR, m_intIOR);
+        transmission_r = 1.0f - reflection_r;
 
         if (sample.x() < reflection_r)
         {
@@ -51,20 +54,26 @@ public:
                 -bRec.wi.x(),
                 -bRec.wi.y(),
                 bRec.wi.z());
-            return Color3f(reflection_r);
+            return Color3f(1.0);
         }
         else
         {
-            float sinPhi = Frame::sinPhi(bRec.wi);
-            float cosPhi = Frame::cosPhi(bRec.wi);
-            float sinThetaT = eta * std::sqrt(std::max(0.0f, 1.0f - cosThetaI * cosThetaI));
-            float cosThetaT = std::sqrt(std::max(0.0f, 1.0f - sinThetaT * sinThetaT));
+            Vector3f vertical = eta * (-bRec.wi + Vector3f(0, 0, cosThetaI));
+            // Direction of horizontal is opposite to the incident direction
+            Vector3f horizontal = std::sqrt(std::max(0.0f, 1.0f - vertical.squaredNorm())) * Vector3f(0, 0, (cosThetaI >= 0.0f ? -1.0f : 1.0f));
+            bRec.wo = vertical + horizontal;
 
-            bRec.wo = Vector3f(
-                -cosPhi * sinThetaT,
-                -sinPhi * sinThetaT,
-                cosThetaT);
-            return Color3f(transmission_r);
+            // float sinThetaI = std::sqrt(std::max(0.0f, 1.0f - cosThetaI * cosThetaI));
+            // float cosPhiI = bRec.wi.x() / sinThetaI;
+            // float sinPhiI = bRec.wi.y() / sinThetaI;
+            // float sinThetaT = eta * sinThetaI;
+            // float cosThetaT = std::sqrt(std::max(0.0f, 1.0f - sinThetaT * sinThetaT));
+
+            // bRec.wo = Vector3f(
+            //     -cosPhiI * sinThetaT,
+            //     -sinPhiI * sinThetaT,
+            //     cosThetaT * (cosThetaI >= 0.0f ? -1.0f : 1.0f));
+            return Color3f(1.0);
         }
     }
 
