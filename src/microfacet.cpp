@@ -10,9 +10,11 @@
 
 NORI_NAMESPACE_BEGIN
 
-class Microfacet : public BSDF {
+class Microfacet : public BSDF
+{
 public:
-    Microfacet(const PropertyList &propList) {
+    Microfacet(const PropertyList &propList)
+    {
         /* RMS surface roughness */
         m_alpha = propList.getFloat("alpha", 0.1f);
 
@@ -25,46 +27,82 @@ public:
         /* Albedo of the diffuse base material (a.k.a "kd") */
         m_kd = propList.getColor("kd", Color3f(0.5f));
 
-        /* To ensure energy conservation, we must scale the 
-           specular component by 1-kd. 
+        /* To ensure energy conservation, we must scale the
+           specular component by 1-kd.
 
-           While that is not a particularly realistic model of what 
-           happens in reality, this will greatly simplify the 
-           implementation. Please see the course staff if you're 
-           interested in implementing a more realistic version 
+           While that is not a particularly realistic model of what
+           happens in reality, this will greatly simplify the
+           implementation. Please see the course staff if you're
+           interested in implementing a more realistic version
            of this BRDF. */
         m_ks = 1 - m_kd.maxCoeff();
     }
 
     /// Evaluate the BRDF for the given pair of directions
-    Color3f eval(const BSDFQueryRecord &bRec) const {
-    	throw NoriException("MicrofacetBRDF::eval(): not implemented!");
+    Color3f eval(const BSDFQueryRecord &bRec) const
+    {
+        Color3f kdTerm = m_kd / M_PI;
+
+        Vector3f wh = (bRec.wi + bRec.wo).normalized();
+        float D = Warp::squareToBeckmannPdf(wh, m_alpha);
+        float F = fresnel(bRec.wi.dot(wh), m_extIOR, m_intIOR);
+        float G = smithG(bRec.wi, bRec.wo, wh);
+        float divisor = 4 * Frame::cosTheta(bRec.wi) * Frame::cosTheta(bRec.wo) * Frame::cosTheta(wh);
+        Color3f ksTerm = m_ks * D * F * G / divisor;
+        // return Color3f(1.0);
+        return kdTerm + ksTerm;
     }
 
     /// Evaluate the sampling density of \ref sample() wrt. solid angles
-    float pdf(const BSDFQueryRecord &bRec) const {
-    	throw NoriException("MicrofacetBRDF::pdf(): not implemented!");
+    float pdf(const BSDFQueryRecord &bRec) const
+    {
+        Vector3f wh = (bRec.wi + bRec.wo).normalized();
+        float D = Warp::squareToBeckmannPdf(wh, m_alpha);
+        float Jh = 1.0 / (4.0 * wh.dot(bRec.wo));
+        float specularTerm = m_ks * D * Jh;
+
+        float diffuseTerm = (1.0 - m_ks) * Frame::cosTheta(bRec.wo) / M_PI;
+
+        return specularTerm + diffuseTerm;
     }
 
     /// Sample the BRDF
-    Color3f sample(BSDFQueryRecord &bRec, const Point2f &_sample) const {
-    	throw NoriException("MicrofacetBRDF::sample(): not implemented!");
+    Color3f sample(BSDFQueryRecord &bRec, const Point2f &_sample) const
+    {
+        if (_sample.x() < m_ks)
+        {
+            // Sample the specular reflection
+            Vector3f n = Warp::squareToBeckmann(_sample, m_alpha);
+            n.normalize();
+            bRec.wo = bRec.wi - 2 * n.dot(bRec.wi) * n;
+        }
+        else
+        {
+            // Sample the diffuse reflection
+            Vector3f r = Warp::squareToCosineHemisphere(_sample);
+            r.normalize();
+            bRec.wo = r;
+        }
+        bRec.measure = ESolidAngle;
+        bRec.eta = 1.0f;
 
         // Note: Once you have implemented the part that computes the scattered
         // direction, the last part of this function should simply return the
         // BRDF value divided by the solid angle density and multiplied by the
         // cosine factor from the reflection equation, i.e.
-        // return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
+        return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
     }
 
-    bool isDiffuse() const {
+    bool isDiffuse() const
+    {
         /* While microfacet BRDFs are not perfectly diffuse, they can be
            handled by sampling techniques for diffuse/non-specular materials,
            hence we return true here */
         return true;
     }
 
-    std::string toString() const {
+    std::string toString() const
+    {
         return tfm::format(
             "Microfacet[\n"
             "  alpha = %f,\n"
@@ -77,9 +115,27 @@ public:
             m_intIOR,
             m_extIOR,
             m_kd.toString(),
-            m_ks
-        );
+            m_ks);
     }
+
+private:
+    float smithG(const Vector3f &v, const Vector3f &h) const
+    {
+        if (v.dot(h) / v.z() <= 0)
+            return 0.0f;
+
+        float b = 1.0 / (m_alpha * Frame::tanTheta(h));
+        if (b >= 1.6f)
+            return 1.0f;
+        float b2 = b * b;
+        return 3.535f * b2 + 2.181f * b2 * b2 / (1 + 2.276f * b + 2.577f * b2);
+    }
+
+    float smithG(const Vector3f &i, const Vector3f &o, const Vector3f &h) const
+    {
+        return smithG(i, h) * smithG(o, h);
+    }
+
 private:
     float m_alpha;
     float m_intIOR, m_extIOR;
