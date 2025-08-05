@@ -44,7 +44,7 @@ void Mesh::initSurfacePdf()
     m_bSurfacePdfInitialized = true;
 }
 
-void Mesh::sampleTriangle(uint32_t f_index, const Point2f &sample, Point3f &p, Vector3f &n) const
+void Mesh::sampleTriangle(uint32_t f_index, const Point2f &sample, Intersection &its) const
 {
     float a = 1.0 - std::sqrt(1.0 - sample.x());
     float b = sample.y() * std::sqrt(1.0 - sample.x());
@@ -54,31 +54,47 @@ void Mesh::sampleTriangle(uint32_t f_index, const Point2f &sample, Point3f &p, V
     int j = m_F(1, f_index);
     int k = m_F(2, f_index);
 
+    // Assuming m_V is not empty
     Vector3f u = m_V.col(i);
     Vector3f v = m_V.col(j);
     Vector3f w = m_V.col(k);
 
-    p = u * a + v * b + w * r;
+    its.p = u * a + v * b + w * r;
+
+    Normal3f geo_n = (v - u).cross(w - u);
+    geo_n.normalize();
+    its.geoFrame = Frame(geo_n);
+
     if (m_N.size() > 0)
     {
-        n = m_N.col(i) * a + m_N.col(j) * b + m_N.col(k) * r;
+        Normal3f n = m_N.col(i) * a + m_N.col(j) * b + m_N.col(k) * r;
         n.normalize();
+        its.shFrame = Frame(n);
     }
     else
     {
-        n = (v - u).cross(w - u);
-        n.normalize();
+        its.shFrame = its.geoFrame; // No normals, use geometric frame
     }
+
+    Point2f uv;
+    if (m_UV.size() > 0)
+    {
+        uv = m_UV.col(i) * a + m_UV.col(j) * b + m_UV.col(k) * r;
+    }
+    its.uv = uv;
+    its.t = 0.0f; // Unoccluded distance along the ray
+    its.mesh = this;
 }
 
-void Mesh::sampleSurface(const Point2f &sample, Point3f &p, Vector3f &n)
+void Mesh::sampleSurface(const Point2f &sample, Intersection &its)
 {
     if (!m_bSurfacePdfInitialized)
     {
         initSurfacePdf();
     }
     size_t index = m_surfacePdf.sample(sample.x());
-    sampleTriangle((uint32_t)index, sample, p, n);
+
+    sampleTriangle((uint32_t)index, sample, its);
 }
 
 float Mesh::surfaceArea(uint32_t index) const

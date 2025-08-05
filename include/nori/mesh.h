@@ -72,9 +72,9 @@ public:
     /// Initialize internal data structures (called once by the XML parser)
     virtual void activate();
 
-    void sampleTriangle(uint32_t f_index, const Point2f &sample, Point3f &p, Vector3f &n) const;
+    void sampleTriangle(uint32_t f_index, const Point2f &sample, Intersection &its) const;
 
-    void sampleSurface(const Point2f &sample, Point3f &p, Vector3f &n);
+    void sampleSurface(const Point2f &sample, Intersection &its);
 
     void initSurfacePdf();
 
