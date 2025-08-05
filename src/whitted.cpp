@@ -18,23 +18,24 @@ public:
     {
         // Find the surface that is visible in the requested direction
         Intersection its;
-
         if (!scene->rayIntersect(ray, its))
         {
             return Color3f(0.0f); // No intersection, return black
         }
 
-        Color3f result(0.0f);
         const Mesh *mesh = its.mesh;
-        if (mesh->isEmitter())
+        if (!mesh)
         {
-            const Emitter *emitter = mesh->getEmitter();
-            if (emitter)
-            {
-                const Ray3f emittingRay = Ray3f(its.p, (its.p - ray.o).normalized());
-                result = emitter->Le(emittingRay);
-            }
+            return Color3f(0.0f); // No mesh, return black
         }
+
+        Color3f result(0.0f);
+        // When the intersection point is an emitter
+        if (const Emitter *emitter = mesh->getEmitter())
+        {
+            result += emitter->getDirectLightTo(scene, ray, its);
+        }
+        // When the intersection point is not an emitter
         else if (const BSDF *bsdf = mesh->getBSDF())
         {
             for (const auto &m : scene->getMeshes())
@@ -70,50 +71,44 @@ private:
 
         if (bsdf->isDiffuse())
         {
-            Intersection sampleIts;
-            emitter->sampleSurface(sampler->next2D(), sampleIts);
+            // Emitted light
+            Intersection emitterIts;
+            Color3f emittedLight = emitter->sampleEmittedLightTo(scene, sampler, its, emitterIts);
 
             // Incident vector
-            Vector3f incident = sampleIts.p - its.p;
-            float distance = incident.norm();
-            Vector3f incidentDir = incident / distance;
-
-            // Check if sampled point is occluded
-            Ray3f shadowRay(sampleIts.p, -incidentDir);
-            shadowRay.maxt = distance - Epsilon;
-            if (scene->rayIntersect(shadowRay))
-                return Color3f(0.0f); // Occluded, return black
+            Vector3f incident = emitterIts.p - its.p;
+            Vector3f incidentDir = incident.normalized();
 
             // Reflection vector
             Vector3f reflect = ray.o - its.p;
             Vector3f reflectDir = reflect.normalized();
 
-            Color3f reflectance = Color3f(0.0f);
-            Frame itsFrame(its.shFrame.n);
+            // Query throughput to bsdf
+            Color3f throughput = Color3f(0.0f);
+            Frame itsFrame = its.shFrame;
             BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
-            reflectance = bsdf->eval(query);
+            throughput = bsdf->eval(query);
 
-            Color3f li = reflectance * emitter->Le(shadowRay);
-            li *= std::max(0.0f, its.shFrame.n.dot(incidentDir));
-            li *= std::max(0.0f, sampleIts.shFrame.n.dot(-incidentDir));
-            li /= distance * distance;
-
-            return li;
+            return emittedLight * throughput;
         }
         else if (sampler->next1D() < 0.95f)
         {
-            Frame itsFrame(its.shFrame.n);
+            // Incident vector
             Vector3f incident = ray.o - its.p;
             Vector3f incidentDir = incident.normalized();
+
+            // Sample the BSDF
+            Frame itsFrame = its.shFrame;
             BSDFQueryRecord query(itsFrame.toLocal(incidentDir));
             Color3f sample = bsdf->sample(query, sampler->next2D());
             if (sample.isZero())
                 return Color3f(0.0f);
+
             // Reflection vector
             Vector3f reflectDir = itsFrame.toWorld(query.wo);
 
+            // Recursive
             Ray3f reflectRay(its.p, reflectDir);
-
             return (1.0f / 0.95f) * Li(scene, sampler, reflectRay);
         }
     }
