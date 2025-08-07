@@ -60,47 +60,6 @@ public:
             }
         }
 
-        // if (throughput.isZero() || last_its.mesh == nullptr)
-        // {
-        //     return resultColor;
-        // }
-
-        // const BSDF *bsdf = last_its.mesh->getBSDF();
-        // if (bsdf != nullptr && bsdf->isDiffuse())
-        // {
-        //     for (const auto &m : scene->getMeshes())
-        //     {
-        //         if (!m->isEmitter())
-        //             continue;
-
-        //         const Emitter *emitter = m->getEmitter();
-
-        //         Point3f p;
-        //         Vector3f n;
-        //         emitter->sampleSurface(sampler->next2D(), p, n);
-
-        //         // Incident vector
-        //         Vector3f incident = p - last_ray.o;
-        //         float distance = incident.norm();
-        //         Vector3f incidentDir = incident / distance;
-
-        //         // Check if sampled point is occluded
-        //         Ray3f shadowRay(p, -incidentDir);
-        //         shadowRay.maxt = distance - Epsilon;
-        //         if (scene->rayIntersect(shadowRay))
-        //             continue;
-
-        //         // Reflection vector
-        //         Vector3f reflect = ray.o - last_its.p;
-        //         Vector3f reflectDir = reflect.normalized();
-
-        //         Frame itsFrame(n);
-        //         BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
-        //         throughput *= bsdf->eval(query);
-        //         resultColor += throughput * emitter->Le(shadowRay);
-        //     }
-        // }
-
         return resultColor;
     }
 
@@ -110,6 +69,52 @@ public:
     }
 
 private:
+    Color3f sampleIndirectLight(const Scene *scene, Sampler *sampler, const Ray3f &ray,
+                                const Intersection &its) const
+    {
+        Color3f result(0.0f);
+        for (const auto &m : scene->getMeshes())
+        {
+            if (!m->isEmitter())
+                continue;
+            result += sampleIndirectLight(scene, sampler, ray,
+                                          its, m->getEmitter());
+        }
+        return result;
+    }
+
+    Color3f sampleIndirectLight(const Scene *scene, Sampler *sampler, const Ray3f &ray,
+                                const Intersection &its, const Emitter *emitter) const
+    {
+        if (!its.mesh)
+            return Color3f(0.0f); // No mesh, return black
+        const BSDF *bsdf = its.mesh->getBSDF();
+        if (!bsdf)
+            return Color3f(0.0f); // No BSDF, return black
+
+        if (!bsdf->isDiffuse())
+            return Color3f(0.0f); // Only diffuse BSDFs are considered
+
+        // Emitted light
+        Intersection emitterIts;
+        Color3f emittedLight = emitter->sampleEmittedLightTo(scene, sampler->next2D(), its, emitterIts);
+
+        // Incident vector
+        Vector3f incident = emitterIts.p - its.p;
+        Vector3f incidentDir = incident.normalized();
+
+        // Reflection vector
+        Vector3f reflect = ray.o - its.p;
+        Vector3f reflectDir = reflect.normalized();
+
+        // Query throughput to bsdf
+        Color3f throughput = Color3f(0.0f);
+        Frame itsFrame = its.shFrame;
+        BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
+        throughput = bsdf->eval(query);
+
+        return emittedLight * throughput;
+    }
 };
 
 NORI_REGISTER_CLASS(PathMatsIntegrator, "path_mats");

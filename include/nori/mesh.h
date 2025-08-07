@@ -90,6 +90,9 @@ public:
     /// Return the surface area of the given triangle
     float surfaceArea(uint32_t index) const;
 
+    /// Return total surface area of the mesh
+    float totalSurfaceArea();
+
     //// Return an axis-aligned bounding box of the entire mesh
     const BoundingBox3f &getBoundingBox() const { return m_bbox; }
 

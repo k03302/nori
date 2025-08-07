@@ -73,7 +73,7 @@ private:
         {
             // Emitted light
             Intersection emitterIts;
-            Color3f emittedLight = emitter->sampleEmittedLightTo(scene, sampler, its, emitterIts);
+            Color3f emittedLight = emitter->sampleEmittedLightTo(scene, sampler->next2D(), its, emitterIts);
 
             // Incident vector
             Vector3f incident = emitterIts.p - its.p;
