@@ -34,11 +34,14 @@ void Mesh::activate()
 
 void Mesh::initSurfacePdf()
 {
+    m_totalSurfaceArea = 0;
     m_surfacePdf.clear();
     m_surfacePdf.reserve(getTriangleCount());
     for (int i = 0; i < getTriangleCount(); i++)
     {
-        m_surfacePdf.append(surfaceArea(i));
+        float area = surfaceArea(i);
+        m_totalSurfaceArea += area;
+        m_surfacePdf.append(area);
     }
     m_surfacePdf.normalize();
     m_bSurfacePdfInitialized = true;
@@ -112,7 +115,7 @@ float Mesh::totalSurfaceArea()
     {
         initSurfacePdf();
     }
-    return m_surfacePdf.getSum();
+    return m_totalSurfaceArea;
 }
 
 bool Mesh::rayIntersect(uint32_t index, const Ray3f &ray, float &u, float &v, float &t) const

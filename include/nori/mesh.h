@@ -173,15 +173,16 @@ protected:
     Mesh();
 
 protected:
-    std::string m_name;                    ///< Identifying name
-    MatrixXf m_V;                          ///< Vertex positions
-    MatrixXf m_N;                          ///< Vertex normals
-    MatrixXf m_UV;                         ///< Vertex texture coordinates
-    MatrixXu m_F;                          ///< Faces
-    BSDF *m_bsdf = nullptr;                ///< BSDF of the surface
-    Emitter *m_emitter = nullptr;          ///< Associated emitter, if any
-    BoundingBox3f m_bbox;                  ///< Bounding box of the mesh
-    DiscretePDF m_surfacePdf;              ///< Surface PDF for sampling
+    std::string m_name;           ///< Identifying name
+    MatrixXf m_V;                 ///< Vertex positions
+    MatrixXf m_N;                 ///< Vertex normals
+    MatrixXf m_UV;                ///< Vertex texture coordinates
+    MatrixXu m_F;                 ///< Faces
+    BSDF *m_bsdf = nullptr;       ///< BSDF of the surface
+    Emitter *m_emitter = nullptr; ///< Associated emitter, if any
+    BoundingBox3f m_bbox;         ///< Bounding box of the mesh
+    DiscretePDF m_surfacePdf;     ///< Surface PDF for sampling
+    float m_totalSurfaceArea;
     bool m_bSurfacePdfInitialized = false; ///< Has the surface PDF been initialized?
 };
 

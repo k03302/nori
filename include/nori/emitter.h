@@ -54,15 +54,21 @@ public:
 
     virtual Color3f Le(const Ray3f &ray) const;
 
-    void activate() override;
-
     static void sampleSurfaceAll(const Point2f &sample, Intersection &its);
+
+    static const Emitter *sampleEmitter(const float &sample);
+
+    static const std::vector<Emitter *> &getEmitters()
+    {
+        return m_emitters;
+    }
 
 private:
     Mesh *m_mesh = nullptr;                   ///< Pointer to the parent mesh (if any)
     int m_surfaceIndex;                       ///< Index of the surface in the PDF
     static DiscretePDF m_surfacePdf;          ///< Discrete PDF for surface sampling
     static std::vector<Emitter *> m_emitters; ///< All emitters in the scene
+    static bool m_bSampleSurfaceInitialized;  ///< Has the surface PDF been initialized?
 };
 
 NORI_NAMESPACE_END

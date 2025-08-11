@@ -38,12 +38,10 @@ public:
         // When the intersection point is not an emitter
         else if (const BSDF *bsdf = mesh->getBSDF())
         {
-            for (const auto &m : scene->getMeshes())
+            for (const auto &emitter : Emitter::getEmitters())
             {
-                if (!m->isEmitter() || m == mesh)
-                    continue;
                 result += sampleIndirectLight(scene, sampler, ray,
-                                              its, m->getEmitter());
+                                              its, emitter);
             }
         }
 
@@ -79,6 +77,12 @@ private:
             Vector3f incident = emitterIts.p - its.p;
             Vector3f incidentDir = incident.normalized();
 
+            // Check if emitted light reach the intersection point
+            if (scene->rayIntersect(Ray3f(emitterIts.p, -incidentDir)))
+            {
+                return Color3f(0.0f);
+            }
+
             // Reflection vector
             Vector3f reflect = ray.o - its.p;
             Vector3f reflectDir = reflect.normalized();
@@ -109,7 +113,7 @@ private:
 
             // Recursive
             Ray3f reflectRay(its.p, reflectDir);
-            return (1.0f / 0.95f) * Li(scene, sampler, reflectRay);
+            return (1.0f / 0.95f) * sample * Li(scene, sampler, reflectRay);
         }
     }
 };
