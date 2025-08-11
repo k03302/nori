@@ -74,13 +74,12 @@ public:
             // Sample the specular reflection
             Vector3f n = Warp::squareToBeckmann(_sample, m_alpha);
             n.normalize();
-            bRec.wo = bRec.wi - 2 * n.dot(bRec.wi) * n;
+            bRec.wo = 2.0 * n.dot(bRec.wi) * n - bRec.wi;
         }
         else
         {
             // Sample the diffuse reflection
             Vector3f r = Warp::squareToCosineHemisphere(_sample);
-            r.normalize();
             bRec.wo = r;
         }
         bRec.measure = ESolidAngle;
