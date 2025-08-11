@@ -67,12 +67,31 @@ public:
                 {
                     for (const auto &emitter : Emitter::getEmitters())
                     {
-                        Intersection emitter_its;
-                        Color3f emittedLight = emitter->sampleEmittedLightTo(scene, sampler->next2D(), last_its, emitter_its);
-                        BSDFQueryRecord bRec(last_its.shFrame.toLocal(-last_ray.d),
-                                             last_its.shFrame.toLocal((emitter_its.p - last_its.p).normalized()), ESolidAngle);
-                        Color3f reflectance = bsdf->eval(bRec);
-                        resultColor += emittedLight * reflectance * throughput;
+                        float emitterPdf;
+                        Intersection emitterIts;
+                        if (!emitter->sampleEmitter(sampler->next2D(), last_its, emitterIts, emitterPdf))
+                            continue;
+
+                        // Incident vector
+                        Vector3f incident = emitterIts.p - last_its.p;
+                        float distance = incident.norm();
+                        Vector3f incidentDir = incident / distance;
+                        Ray3f incidentRay(last_its.p, incidentDir);
+                        incidentRay.maxt = distance - Epsilon;
+                        if (scene->rayIntersect(incidentRay))
+                            continue;
+
+                        // Reflection vector
+                        Vector3f reflect = last_ray.o - last_its.p;
+                        Vector3f reflectDir = reflect.normalized();
+
+                        Color3f _throughput = Color3f(0.0f);
+                        Frame itsFrame = last_its.shFrame;
+                        BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
+                        _throughput = bsdf->eval(query);
+
+                        Ray3f reflectRay(last_its.p, incidentDir);
+                        resultColor += throughput * _throughput * emitter->Le() / emitterPdf;
                     }
                 }
 
