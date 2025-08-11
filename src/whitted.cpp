@@ -76,15 +76,16 @@ private:
         {
             float emitterPdf;
             Intersection emitterIts;
-            bool success = emitter->sampleEmitter(sampler->next2D(), its, emitterIts, emitterPdf);
+            if (!emitter->sampleEmitter(sampler->next2D(), its, emitterIts, emitterPdf))
+                return Color3f(0.0f);
 
             // Incident vector
             Vector3f incident = emitterIts.p - its.p;
-            Vector3f incidentDir = incident.normalized();
-            Ray3f incidentRay(emitterIts.p, -incidentDir);
-            success &= scene->rayIntersect(incidentRay);
-
-            if (!success)
+            float distance = incident.norm();
+            Vector3f incidentDir = incident / distance;
+            Ray3f incidentRay(its.p, incidentDir);
+            incidentRay.maxt = distance - Epsilon;
+            if (scene->rayIntersect(incidentRay))
                 return Color3f(0.0f);
 
             // Reflection vector
@@ -97,7 +98,7 @@ private:
             throughput = bsdf->eval(query);
 
             Ray3f reflectRay(its.p, incidentDir);
-            resultColor = throughput * Li(scene, sampler, reflectRay) / emitterPdf;
+            resultColor = throughput * emitter->Le() / emitterPdf;
         }
         else
         {
