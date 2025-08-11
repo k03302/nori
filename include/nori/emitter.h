@@ -33,13 +33,6 @@ public:
     void sampleSurface(const Point2f &sample, Intersection &its) const;
 
     /*
-    This method assume that the ray intersects the emitter's mesh (at emitterIts) without occlusion.
-    */
-    Color3f getDirectLightTo(const Scene *scene, const Ray3f &ray, const Intersection &emitterIts) const;
-
-    Color3f getDirectLightTo(const Scene *scene, const Ray3f &ray) const;
-
-    /*
     Calculate the emitted light from the emitter's mesh to the intersection point
     */
     Color3f getEmittedLightTo(const Scene *scene, const Intersection &originIts, const Intersection &emitterIts) const;
@@ -52,7 +45,11 @@ public:
     */
     Color3f sampleEmittedLightTo(const Scene *scene, const Point2f &sample, const Intersection &originIts, Intersection &emitterIts) const;
 
-    virtual Color3f Le(const Ray3f &ray) const;
+    bool sampleEmitter(const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const;
+
+    float pdf(const Intersection &emitteeIts, const Intersection &emitterIts) const;
+
+    virtual Color3f Le(const Ray3f &ray = Ray3f()) const;
 
     static void sampleSurfaceAll(const Point2f &sample, Intersection &its);
 

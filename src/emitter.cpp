@@ -27,29 +27,6 @@ void Emitter::sampleSurface(const Point2f &sample, Intersection &its) const
     m_mesh->sampleSurface(sample, its);
 }
 
-Color3f Emitter::getDirectLightTo(const Scene *scene, const Ray3f &ray, const Intersection &emitterIts) const
-{
-    if (m_mesh == nullptr)
-    {
-        return Color3f(0.0f); // Not intersecting this emitter's mesh
-    }
-    Ray3f r(emitterIts.p, -ray.d);
-    return Le(r);
-}
-
-Color3f Emitter::getDirectLightTo(const Scene *scene, const Ray3f &ray) const
-{
-    Intersection its;
-
-    if (!scene->rayIntersect(ray, its))
-        return Color3f(0.0f); // No intersection, return black
-
-    if (its.mesh != m_mesh)
-        return Color3f(0.0f); // Not intersecting this emitter's mesh
-
-    return getDirectLightTo(scene, ray, its);
-}
-
 Color3f Emitter::getEmittedLightTo(const Scene *scene, const Intersection &originIts, const Intersection &emitterIts) const
 {
     Vector3f lightDir = originIts.p - emitterIts.p;
@@ -73,6 +50,36 @@ Color3f Emitter::sampleEmittedLightTo(const Scene *scene, const Point2f &sample,
 {
     sampleSurface(sample, emitterIts);
     return getEmittedLightTo(scene, originIts, emitterIts);
+}
+
+bool Emitter::sampleEmitter(const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const
+{
+    if (m_mesh == nullptr)
+        return false;
+
+    sampleSurface(sample, emitterIts);
+
+    pdf = this->pdf(emitteeIts, emitterIts);
+
+    return pdf > 0.0f;
+}
+
+float Emitter::pdf(const Intersection &emitteeIts, const Intersection &emitterIts) const
+{
+    float totalArea = m_mesh->totalSurfaceArea();
+    Vector3f toEmitter = emitterIts.p - emitteeIts.p;
+    float distance2 = toEmitter.squaredNorm();
+    Vector3f toEmitterNormalized = toEmitter.normalized();
+
+    float cosTheta1 = toEmitterNormalized.dot(emitteeIts.shFrame.n);
+    if (cosTheta1 <= 0)
+        return 0;
+
+    float cosTheta2 = (-toEmitterNormalized).dot(emitterIts.shFrame.n);
+    if (cosTheta2 <= 0)
+        return 0;
+
+    return distance2 / (cosTheta1 * cosTheta2 * totalArea);
 }
 
 Color3f Emitter::Le(const Ray3f &ray) const

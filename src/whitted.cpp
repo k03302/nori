@@ -33,7 +33,7 @@ public:
         // When the intersection point is an emitter
         if (const Emitter *emitter = mesh->getEmitter())
         {
-            result += emitter->getDirectLightTo(scene, ray, its);
+            result += emitter->Le();
         }
         // When the intersection point is not an emitter
         else if (const BSDF *bsdf = mesh->getBSDF())
@@ -67,35 +67,39 @@ private:
         if (!bsdf)
             return Color3f(0.0f); // No BSDF, return black
 
+        if (sampler->next1D() >= 0.95f)
+            return Color3f(0.0f); // Russian roulette failed
+
+        Color3f resultColor(0.0f);
+
         if (bsdf->isDiffuse())
         {
-            // Emitted light
+            float emitterPdf;
             Intersection emitterIts;
-            Color3f emittedLight = emitter->sampleEmittedLightTo(scene, sampler->next2D(), its, emitterIts);
+            bool success = emitter->sampleEmitter(sampler->next2D(), its, emitterIts, emitterPdf);
 
             // Incident vector
             Vector3f incident = emitterIts.p - its.p;
             Vector3f incidentDir = incident.normalized();
+            Ray3f incidentRay(emitterIts.p, -incidentDir);
+            success &= scene->rayIntersect(incidentRay);
 
-            // Check if emitted light reach the intersection point
-            if (scene->rayIntersect(Ray3f(emitterIts.p, -incidentDir)))
-            {
+            if (!success)
                 return Color3f(0.0f);
-            }
 
             // Reflection vector
             Vector3f reflect = ray.o - its.p;
             Vector3f reflectDir = reflect.normalized();
 
-            // Query throughput to bsdf
             Color3f throughput = Color3f(0.0f);
             Frame itsFrame = its.shFrame;
             BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
             throughput = bsdf->eval(query);
 
-            return emittedLight * throughput;
+            Ray3f reflectRay(its.p, incidentDir);
+            resultColor = throughput * Li(scene, sampler, reflectRay) / emitterPdf;
         }
-        else if (sampler->next1D() < 0.95f)
+        else
         {
             // Incident vector
             Vector3f incident = ray.o - its.p;
@@ -113,8 +117,10 @@ private:
 
             // Recursive
             Ray3f reflectRay(its.p, reflectDir);
-            return (1.0f / 0.95f) * sample * Li(scene, sampler, reflectRay);
+            resultColor = sample * Li(scene, sampler, reflectRay);
         }
+
+        return (1.0f / 0.95f) * resultColor;
     }
 };
 
