@@ -60,7 +60,7 @@ public:
                             BSDFQueryRecord rec(wi, wo, ESolidAngle);
                             const float bsdfPdf = bsdf->pdf(rec);
                             const float emitterPdf = emitter->pdf(scene, last_its, its);
-                            weight = bsdfPdf / (bsdfPdf + emitterPdf);
+                            weight = bsdfPdf / (bsdfPdf + emitterPdf + Epsilon);
                         }
                     }
                 }
@@ -88,7 +88,7 @@ public:
                         Color3f _throughput = bsdf->eval(query);
 
                         const float bsdfPdf = bsdf->pdf(query);
-                        const float weight = emitterPdf / (emitterPdf + bsdfPdf);
+                        const float weight = emitterPdf / (emitterPdf + bsdfPdf + Epsilon);
 
                         resultColor += weight * throughput * _throughput * emitter->Le() * (cosTheta / emitterPdf);
                     }
