@@ -41,6 +41,11 @@ public:
     /// Evaluate the BRDF for the given pair of directions
     Color3f eval(const BSDFQueryRecord &bRec) const
     {
+        /* This is a smooth BRDF -- return zero if the measure
+           is wrong, or when queried for illumination on the backside */
+        if (bRec.measure != ESolidAngle || Frame::cosTheta(bRec.wi) <= 0 || Frame::cosTheta(bRec.wo) <= 0)
+            return Color3f(0.0f);
+
         Color3f kdTerm = m_kd / M_PI;
 
         Vector3f wh = (bRec.wi + bRec.wo).normalized();
@@ -56,6 +61,10 @@ public:
     /// Evaluate the sampling density of \ref sample() wrt. solid angles
     float pdf(const BSDFQueryRecord &bRec) const
     {
+        /* This is a smooth BRDF -- return zero if the measure
+        is wrong, or when queried for illumination on the backside */
+        if (bRec.measure != ESolidAngle || Frame::cosTheta(bRec.wi) <= 0 || Frame::cosTheta(bRec.wo) <= 0)
+            return 0.0f;
         Vector3f wh = (bRec.wi + bRec.wo).normalized();
         float D = Warp::squareToBeckmannPdf(wh, m_alpha);
         float Jh = 1.0 / (4.0 * wh.dot(bRec.wo));
@@ -89,7 +98,12 @@ public:
         // direction, the last part of this function should simply return the
         // BRDF value divided by the solid angle density and multiplied by the
         // cosine factor from the reflection equation, i.e.
-        return eval(bRec) * Frame::cosTheta(bRec.wo) / pdf(bRec);
+        Color3f result = eval(bRec) * Frame::cosTheta(bRec.wo) / (pdf(bRec) + Epsilon);
+        if (result.array().isNaN().any())
+        {
+            throw NoriException("Microfacet::sample() returned NaN.");
+        }
+        return result;
     }
 
     bool isDiffuse() const
