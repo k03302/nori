@@ -32,15 +32,15 @@ public:
 
     void sampleSurface(const Point2f &sample, Intersection &its) const;
 
-    bool sampleEmitter(const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const;
+    bool sampleEmitter(const Scene *scene, const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const;
 
-    float pdf(const Intersection &emitteeIts, const Intersection &emitterIts) const;
+    bool sampleEmitter(const Scene *scene, const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf, float &cosTheta) const;
+
+    float pdf(const Scene *scene, const Intersection &emitteeIts, const Intersection &emitterIts) const;
+
+    float pdf(const Scene *scene, const Intersection &emitteeIts, const Intersection &emitterIts, float &cosTheta) const;
 
     virtual Color3f Le(const Ray3f &ray = Ray3f()) const;
-
-    static void sampleSurfaceAll(const Point2f &sample, Intersection &its);
-
-    static const Emitter *sampleEmitter(const float &sample);
 
     static const std::vector<Emitter *> &getEmitters()
     {

@@ -74,31 +74,18 @@ private:
 
         if (bsdf->isDiffuse())
         {
-            float emitterPdf;
+            float emitterPdf, cosTheta;
             Intersection emitterIts;
-            if (!emitter->sampleEmitter(sampler->next2D(), its, emitterIts, emitterPdf))
+            if (!emitter->sampleEmitter(scene, sampler->next2D(), its, emitterIts, emitterPdf, cosTheta))
                 return Color3f(0.0f);
 
-            // Incident vector
-            Vector3f incident = emitterIts.p - its.p;
-            float distance = incident.norm();
-            Vector3f incidentDir = incident / distance;
-            Ray3f incidentRay(its.p, incidentDir);
-            incidentRay.maxt = distance - Epsilon;
-            if (scene->rayIntersect(incidentRay))
-                return Color3f(0.0f);
-
-            // Reflection vector
-            Vector3f reflect = ray.o - its.p;
-            Vector3f reflectDir = reflect.normalized();
-
-            Color3f throughput = Color3f(0.0f);
             Frame itsFrame = its.shFrame;
-            BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
-            throughput = bsdf->eval(query);
+            Vector3f wi = itsFrame.toLocal((emitterIts.p - its.p).normalized());
+            Vector3f wo = itsFrame.toLocal((ray.o - its.p).normalized());
 
-            Ray3f reflectRay(its.p, incidentDir);
-            resultColor = throughput * emitter->Le() / emitterPdf;
+            BSDFQueryRecord query(wi, wo, ESolidAngle);
+            Color3f _throughput = bsdf->eval(query);
+            resultColor = _throughput * emitter->Le() * (cosTheta / emitterPdf);
         }
         else
         {

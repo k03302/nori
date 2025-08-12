@@ -27,24 +27,36 @@ void Emitter::sampleSurface(const Point2f &sample, Intersection &its) const
     m_mesh->sampleSurface(sample, its);
 }
 
-bool Emitter::sampleEmitter(const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const
+bool Emitter::sampleEmitter(const Scene *scene, const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf, float &cosTheta) const
 {
     if (m_mesh == nullptr)
         return false;
 
     sampleSurface(sample, emitterIts);
 
-    pdf = this->pdf(emitteeIts, emitterIts);
+    pdf = this->pdf(scene, emitteeIts, emitterIts, cosTheta);
 
     return pdf > 0.0f;
 }
 
-float Emitter::pdf(const Intersection &emitteeIts, const Intersection &emitterIts) const
+bool Emitter::sampleEmitter(const Scene *scene, const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const
+{
+    if (m_mesh == nullptr)
+        return false;
+
+    sampleSurface(sample, emitterIts);
+
+    pdf = this->pdf(scene, emitteeIts, emitterIts);
+
+    return pdf > 0.0f;
+}
+
+float Emitter::pdf(const Scene *scene, const Intersection &emitteeIts, const Intersection &emitterIts) const
 {
     float totalArea = m_mesh->totalSurfaceArea();
     Vector3f toEmitter = emitterIts.p - emitteeIts.p;
-    float distance2 = toEmitter.squaredNorm();
-    Vector3f toEmitterNormalized = toEmitter.normalized();
+    float distance = toEmitter.norm();
+    Vector3f toEmitterNormalized = toEmitter / distance;
 
     float cosTheta1 = toEmitterNormalized.dot(emitteeIts.shFrame.n);
     if (cosTheta1 <= 0)
@@ -54,39 +66,51 @@ float Emitter::pdf(const Intersection &emitteeIts, const Intersection &emitterIt
     if (cosTheta2 <= 0)
         return 0;
 
-    return distance2 / (cosTheta1 * cosTheta2 * totalArea);
+    Ray3f ray(emitteeIts.p, toEmitterNormalized);
+    ray.maxt = distance - Epsilon;
+    if (scene->rayIntersect(ray))
+        return 0;
+
+    float pdf = distance * distance / (cosTheta1 * totalArea);
+    if (std::isnan(pdf))
+    {
+        throw NoriException("Emitter::pdf() returned NaN.");
+    }
+    return pdf;
+}
+
+float Emitter::pdf(const Scene *scene, const Intersection &emitteeIts, const Intersection &emitterIts, float &cosTheta2) const
+{
+    float totalArea = m_mesh->totalSurfaceArea();
+    Vector3f toEmitter = emitterIts.p - emitteeIts.p;
+    float distance = toEmitter.norm();
+    Vector3f toEmitterNormalized = toEmitter / distance;
+
+    float cosTheta1 = toEmitterNormalized.dot(emitteeIts.shFrame.n);
+    if (cosTheta1 <= 0)
+        return 0;
+
+    cosTheta2 = (-toEmitterNormalized).dot(emitterIts.shFrame.n);
+    if (cosTheta2 <= 0)
+        return 0;
+
+    Ray3f ray(emitteeIts.p, toEmitterNormalized);
+    ray.maxt = distance - Epsilon;
+    if (scene->rayIntersect(ray))
+        return 0;
+
+    float pdf = distance * distance / (cosTheta1 * totalArea);
+    if (std::isnan(pdf))
+    {
+        throw NoriException("Emitter::pdf() returned NaN.");
+    }
+    return pdf;
 }
 
 Color3f Emitter::Le(const Ray3f &ray) const
 {
     // Default implementation returns black
     return Color3f(0.0f);
-}
-
-void Emitter::sampleSurfaceAll(const Point2f &sample, Intersection &its)
-{
-    its = Intersection();
-
-    const Emitter *emitter = sampleEmitter(sample.x());
-
-    if (emitter == nullptr)
-        return;
-
-    emitter->sampleSurface(sample, its);
-}
-
-const Emitter *Emitter::sampleEmitter(const float &sample)
-{
-    if (!m_bSampleSurfaceInitialized)
-    {
-        m_bSampleSurfaceInitialized = true;
-        m_surfacePdf.normalize();
-    }
-    if (m_emitters.empty())
-        return nullptr;
-
-    int index = m_surfacePdf.sample(sample);
-    return m_emitters[index];
 }
 
 NORI_NAMESPACE_END

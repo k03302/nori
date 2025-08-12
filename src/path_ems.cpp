@@ -15,12 +15,11 @@ public:
         /* No parameters this time */
     }
 
-    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &ray) const
+    Color3f Li(const Scene *scene, Sampler *sampler, const Ray3f &_ray) const
     {
-        Ray3f last_ray = ray;
-        Intersection last_its;
+        Ray3f ray = _ray;
+        Intersection its, last_its;
         float eta = 1.0f;
-        Color3f last_reflectance(1.0f);
         Color3f throughput(1.0f);
         Color3f resultColor(0.0f);
 
@@ -34,71 +33,56 @@ public:
                 }
             }
 
-            if (!scene->rayIntersect(last_ray, last_its))
+            last_its = its;
+            if (!scene->rayIntersect(ray, its))
             {
                 throughput = Color3f(0.0f);
                 break;
             }
 
-            bool bDoubleSampling = true;
-            if (iteration == 0)
+            if (const Emitter *emitter = its.mesh->getEmitter())
             {
-                bDoubleSampling = false;
-            }
-            else if (const Mesh *mesh = last_its.mesh)
-            {
-                if (!mesh->getBSDF()->isDiffuse())
+                const Mesh *bsdfMesh = last_its.mesh;
+                if (iteration == 0)
                 {
-                    bDoubleSampling = false;
+                    resultColor += throughput * emitter->Le();
                 }
-            }
-            if (!bDoubleSampling)
-            {
-                if (const Emitter *emitter = last_its.mesh->getEmitter())
+                else if (bsdfMesh != nullptr)
                 {
-                    const Ray3f emittingRay = Ray3f(last_its.p, -last_ray.d);
-                    resultColor += throughput * emitter->Le(emittingRay);
+                    if (const BSDF *bsdf = bsdfMesh->getBSDF())
+                    {
+                        if (!bsdf->isDiffuse())
+                        {
+                            resultColor += throughput * emitter->Le();
+                        }
+                    }
                 }
             }
 
-            if (const BSDF *bsdf = last_its.mesh->getBSDF())
+            if (const BSDF *bsdf = its.mesh->getBSDF())
             {
                 if (bsdf->isDiffuse())
                 {
                     for (const auto &emitter : Emitter::getEmitters())
                     {
-                        float emitterPdf;
+                        float emitterPdf, cosTheta;
                         Intersection emitterIts;
-                        if (!emitter->sampleEmitter(sampler->next2D(), last_its, emitterIts, emitterPdf))
+                        if (!emitter->sampleEmitter(scene, sampler->next2D(), its, emitterIts, emitterPdf, cosTheta))
                             continue;
 
-                        // Incident vector
-                        Vector3f incident = emitterIts.p - last_its.p;
-                        float distance = incident.norm();
-                        Vector3f incidentDir = incident / distance;
-                        Ray3f incidentRay(last_its.p, incidentDir);
-                        incidentRay.maxt = distance - Epsilon;
-                        if (scene->rayIntersect(incidentRay))
-                            continue;
+                        Frame itsFrame = its.shFrame;
+                        Vector3f wi = itsFrame.toLocal((emitterIts.p - its.p).normalized());
+                        Vector3f wo = itsFrame.toLocal((ray.o - its.p).normalized());
 
-                        // Reflection vector
-                        Vector3f reflect = last_ray.o - last_its.p;
-                        Vector3f reflectDir = reflect.normalized();
-
-                        Color3f _throughput = Color3f(0.0f);
-                        Frame itsFrame = last_its.shFrame;
-                        BSDFQueryRecord query(itsFrame.toLocal(incidentDir), itsFrame.toLocal(reflectDir), ESolidAngle);
-                        _throughput = bsdf->eval(query);
-
-                        Ray3f reflectRay(last_its.p, incidentDir);
-                        resultColor += throughput * _throughput * emitter->Le() / emitterPdf;
+                        BSDFQueryRecord query(wi, wo, ESolidAngle);
+                        Color3f _throughput = bsdf->eval(query);
+                        resultColor += throughput * _throughput * emitter->Le() * (cosTheta / emitterPdf);
                     }
                 }
 
-                BSDFQueryRecord bRec(last_its.shFrame.toLocal(-last_ray.d));
-                last_reflectance = bsdf->sample(bRec, sampler->next2D());
-                last_ray = Ray3f(last_its.p, last_its.shFrame.toWorld(bRec.wo));
-                throughput *= last_reflectance;
+                BSDFQueryRecord bRec(its.shFrame.toLocal(-ray.d));
+                throughput *= bsdf->sample(bRec, sampler->next2D());
+                ray = Ray3f(its.p, its.shFrame.toWorld(bRec.wo));
                 eta *= bRec.eta;
             }
             else
