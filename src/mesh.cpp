@@ -47,6 +47,13 @@ void Mesh::initSurfacePdf()
     m_bSurfacePdfInitialized = true;
 }
 
+void Mesh::getVertex(uint32_t fIndex, Vector3f &v0, Vector3f &v1, Vector3f &v2) const
+{
+    v0 = m_V.col(m_F(0, fIndex));
+    v1 = m_V.col(m_F(1, fIndex));
+    v2 = m_V.col(m_F(2, fIndex));
+}
+
 void Mesh::sampleTriangle(uint32_t f_index, const Point2f &sample, Intersection &its) const
 {
     float a = 1.0 - std::sqrt(1.0 - sample.x());

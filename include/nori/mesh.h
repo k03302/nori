@@ -10,7 +10,6 @@
 #include <nori/frame.h>
 #include <nori/bbox.h>
 #include <nori/dpdf.h>
-
 NORI_NAMESPACE_BEGIN
 
 /**
@@ -77,6 +76,8 @@ public:
     void sampleSurface(const Point2f &sample, Intersection &its);
 
     void initSurfacePdf();
+
+    void getVertex(uint32_t fIndex, Vector3f &v0, Vector3f &v1, Vector3f &v2) const;
 
     /// Return the total number of triangles in this shape
     uint32_t getTriangleCount() const
