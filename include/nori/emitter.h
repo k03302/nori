@@ -32,19 +32,6 @@ public:
 
     void sampleSurface(const Point2f &sample, Intersection &its) const;
 
-    /*
-    Calculate the emitted light from the emitter's mesh to the intersection point
-    */
-    Color3f getEmittedLightTo(const Scene *scene, const Intersection &originIts, const Intersection &emitterIts) const;
-
-    /*
-    Sample surface of emitter's mesh
-    and return the reached light from sampled surface to the intersection
-
-    emitterIts is the output parameter for the intersection point on the emitter's surface
-    */
-    Color3f sampleEmittedLightTo(const Scene *scene, const Point2f &sample, const Intersection &originIts, Intersection &emitterIts) const;
-
     bool sampleEmitter(const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const;
 
     float pdf(const Intersection &emitteeIts, const Intersection &emitterIts) const;

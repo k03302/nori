@@ -27,31 +27,6 @@ void Emitter::sampleSurface(const Point2f &sample, Intersection &its) const
     m_mesh->sampleSurface(sample, its);
 }
 
-Color3f Emitter::getEmittedLightTo(const Scene *scene, const Intersection &originIts, const Intersection &emitterIts) const
-{
-    Vector3f lightDir = originIts.p - emitterIts.p;
-    float distance = lightDir.norm();
-    Vector3f lightDirNormalized = lightDir / distance;
-
-    Ray3f shadowRay(originIts.p, -lightDirNormalized);
-    shadowRay.maxt = distance - Epsilon;
-
-    if (scene->rayIntersect(shadowRay))
-        return Color3f(0.0f); // Occluded, return black
-
-    Color3f emittedLight = Le(shadowRay);
-    float cosTheta1 = std::fabs(originIts.shFrame.n.dot(-lightDirNormalized));
-    float cosTheta2 = std::fabs(emitterIts.shFrame.n.dot(lightDirNormalized));
-
-    return emittedLight * cosTheta1 * cosTheta2 / (distance * distance);
-}
-
-Color3f Emitter::sampleEmittedLightTo(const Scene *scene, const Point2f &sample, const Intersection &originIts, Intersection &emitterIts) const
-{
-    sampleSurface(sample, emitterIts);
-    return getEmittedLightTo(scene, originIts, emitterIts);
-}
-
 bool Emitter::sampleEmitter(const Point2f &sample, const Intersection &emitteeIts, Intersection &emitterIts, float &pdf) const
 {
     if (m_mesh == nullptr)
