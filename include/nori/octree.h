@@ -1,547 +1,85 @@
 #pragma once
 #include <nori/common.h>
 #include <nori/bbox.h>
-#include <queue>
 #include <nori/mesh.h>
+#include <queue>
+
 NORI_NAMESPACE_BEGIN
 
-// Allocator singletons
-constexpr int TOTAL_OCT_NODE_COUNT = 5000000;
-constexpr int TOTAL_LIST_COUNT = 5000000;
-constexpr int TOTAL_TRIANGLE_COUNT = 10000000;
-constexpr int MAX_OCTREE_DEPTH = 10;
-
-inline void printIndent(std::ostream &os, int indent)
-{
-    for (int i = 0; i < indent; ++i)
-        os << "    ";
-}
-
-inline BoundingBox3f getOctSubcell(const BoundingBox3f &bbox, int index)
-{
-    BoundingBox3f subcell;
-    // For each axis, select min or max based on the bits of i
-    subcell.min.x() = (index & 1) ? bbox.getCenter().x() : bbox.min.x();
-    subcell.max.x() = (index & 1) ? bbox.max.x() : bbox.getCenter().x();
-
-    subcell.min.y() = (index & 2) ? bbox.getCenter().y() : bbox.min.y();
-    subcell.max.y() = (index & 2) ? bbox.max.y() : bbox.getCenter().y();
-
-    subcell.min.z() = (index & 4) ? bbox.getCenter().z() : bbox.min.z();
-    subcell.max.z() = (index & 4) ? bbox.max.z() : bbox.getCenter().z();
-
-    return subcell;
-}
-
-// StackAllocator is a simple stack-based memory allocator for OctNode and TriangleList.
-template <class Element, int Count, int MaxTmpPool = 1024>
-class StackAllocator
-{
-private:
-    static Element pool[Count];
-    static int currentCount;
-    static std::queue<Element *> tmpPool;
-
-protected:
-    static Element *allocate()
-    {
-        if (!tmpPool.empty())
-        {
-            Element *el = tmpPool.front();
-            tmpPool.pop();
-            return el;
-        }
-        if (currentCount >= Count)
-        {
-            std::cerr << "StackAllocator: Out of memory!" << typeid(Element).name() << std::endl;
-            exit(1);
-        }
-        return &pool[currentCount++];
-    }
-
-    static void deallocate(Element *el)
-    {
-        if ((int)tmpPool.size() < MaxTmpPool)
-        {
-            tmpPool.push(el);
-        }
-        // else: drop the pointer, don't store more than MaxTmpPool
-    }
-
-public:
-    static int getCurrentCount()
-    {
-        return currentCount;
-    }
-};
-
-class Triangle : public StackAllocator<Triangle, TOTAL_TRIANGLE_COUNT>
+class Triangle
 {
 public:
-    int fIndex; // face(triangle) index
-    Mesh *mesh; // pointer to the mesh that owns this triangle
-    const BoundingBox3f &getBoundingBox() const { return bbox; }
-
-    Triangle() : fIndex(-1), mesh(nullptr) {}
-
-    Triangle(int _fIndex, Mesh *_mesh)
+    static const Triangle &getTriangle(int fIndex, Mesh &mesh)
     {
-        initialize(_fIndex, _mesh);
-    }
+        if (currentTriangleIndex >= TRIANGLE_COUNT)
+            throw NoriException("Triangle::getTriangle: exceeded maximum triangle count");
+        Triangle &triangle = triangles[currentTriangleIndex++];
 
-    static Triangle *getTriangle(int _fIndex, Mesh *_mesh)
-    {
-        Triangle *triangle = Triangle::allocate();
-        if (triangle == nullptr)
-            return nullptr;
-        triangle->initialize(_fIndex, _mesh);
+        Vector3f v0, v1, v2;
+        mesh.getVertex(fIndex, v0, v1, v2);
+        triangle.m_min = v0.cwiseMin(v1).cwiseMin(v2);
+        triangle.m_max = v0.cwiseMax(v1).cwiseMax(v2);
+        triangle.m_fIndex = fIndex;
+        triangle.m_mesh = &mesh;
         return triangle;
     }
 
-    static void returnTriangle(Triangle *triangle)
-    {
-        if (triangle == nullptr)
-            return;
-        triangle->fIndex = -1;    // Reset index
-        triangle->mesh = nullptr; // Reset mesh pointer
-        Triangle::deallocate(triangle);
-    }
-
-    void initialize(int _fIndex, Mesh *_mesh)
-    {
-        fIndex = _fIndex;
-        mesh = _mesh;
-        calculateBoundingBox();
-    }
-
-    void calculateBoundingBox()
-    {
-        if (mesh == nullptr)
-            return;
-        bbox = mesh->getBoundingBox(fIndex);
-    }
-
-    void print(std::ostream &os, int indent) const
-    {
-        printIndent(os, indent);
-        os << "(" << fIndex << ")\n";
-    }
-
 private:
-    BoundingBox3f bbox; // bounding box of the triangle
+    int m_fIndex;
+    Mesh *m_mesh;
+    Point3f m_min, m_max;
+
+    bool isValid() const
+    {
+        return m_mesh != nullptr;
+    }
+
+    static const int TRIANGLE_COUNT = 10000000;
+    static Triangle triangles[TRIANGLE_COUNT];
+    static int currentTriangleIndex;
 };
 
-class TriangleList : public StackAllocator<TriangleList, TOTAL_LIST_COUNT>
+struct OctNodeContextedTriangle
+{
+    int m_octNodeOverlap;
+    int m_overlapCount;
+    Triangle *m_triangle;
+};
+
+class OctNode
 {
 public:
-    static const int TOTAL_ELEMENT_COUNT = 10;
-
-    TriangleList()
-    {
-        initialize();
-    }
-
-    void initialize()
-    {
-        triangleCount = 0;
-        for (int i = 0; i < TOTAL_ELEMENT_COUNT; i++)
-        {
-            triangles[i] = nullptr;
-        }
-    }
-
-    static TriangleList *getTriangleList()
-    {
-        TriangleList *list = TriangleList::allocate();
-        if (list == nullptr)
-            return nullptr;
-        list->initialize();
-        return list;
-    }
-
-    static void returnTriangleList(TriangleList *list)
-    {
-        if (list == nullptr)
-            return;
-        list->initialize(); // Reset the list
-        TriangleList::deallocate(list);
-    }
-
-    bool isFull() const { return triangleCount == TOTAL_ELEMENT_COUNT; }
-
-    bool push(const Triangle &e)
-    {
-        if (isFull())
-            return false;
-        triangles[triangleCount++] = &e;
-        return true;
-    }
-
-    void foreachEl(const std::function<void(const Triangle &)> &callback) const
-    {
-        for (int i = 0; i < triangleCount; i++)
-        {
-            callback(*triangles[i]);
-        }
-    }
-
-    void print(std::ostream &os, int indent) const
-    {
-        printIndent(os, indent);
-        os << "TriangleList(triangleCount=" << triangleCount << ")\n";
-        for (int i = 0; i < triangleCount; i++)
-        {
-            triangles[i]->print(os, indent + 1);
-        }
-    }
-
-    const int getTriangleCount() const
-    {
-        return triangleCount;
-    }
-
-    const Triangle *getTriangle(int index) const
-    {
-        if (index < 0 || index >= triangleCount)
-            return nullptr; // Invalid index
-        return triangles[index];
-    }
-
 private:
-    const Triangle *triangles[TOTAL_ELEMENT_COUNT];
-    int triangleCount;
+    OctNodeContextedTriangle m_triangles[8];
+    int m_maxOverlapCount;
 };
 
-class OctNode : public StackAllocator<OctNode, TOTAL_OCT_NODE_COUNT>
-{
-public:
-    OctNode() = default;
-    OctNode(const BoundingBox3f &_bbox, int _depth, bool _bIsLeaf)
-    {
-        initialize(_bbox, _depth, _bIsLeaf);
-    }
-
-    void initialize(const BoundingBox3f &_bbox, int _depth, bool _bIsLeaf)
-    {
-        bbox = _bbox;
-        depth = _depth;
-        bIsLeaf = _bIsLeaf;
-
-        if (bIsLeaf)
-        {
-            data = TriangleList::getTriangleList();
-        }
-    }
-
-    static OctNode *getOctNode(const BoundingBox3f &_bbox, int _depth, bool _bIsLeaf)
-    {
-        OctNode *node = OctNode::allocate();
-        if (node == nullptr)
-            return nullptr;
-        node->initialize(_bbox, _depth, _bIsLeaf); // Initialize with default values
-        return node;
-    }
-
-    static void returnOctNode(OctNode *node)
-    {
-        if (node == nullptr)
-            return;
-        OctNode::deallocate(node);
-    }
-
-    bool hasData() const
-    {
-        return data != nullptr;
-    }
-
-    bool isLeaf() const
-    {
-        return bIsLeaf;
-    }
-
-    bool push(const Triangle &triangle)
-    {
-        if (!isIncluding(triangle) || depth >= MAX_OCTREE_DEPTH)
-        {
-            return false; // Triangle does not fit in this node's bounding box
-        }
-
-        if (isLeaf())
-        {
-
-            if (!hasData())
-            {
-                data = TriangleList::getTriangleList();
-                if (!data)
-                    return false;
-            }
-
-            if (!data->isFull())
-            {
-                data->push(triangle);
-                return true;
-            }
-            else
-            {
-                pushDataToChildren();
-                return pushToChildren(triangle);
-            }
-        }
-        else if (depth < MAX_OCTREE_DEPTH)
-        {
-            return pushToChildren(triangle);
-        }
-        return false;
-    }
-
-    void createChildWithBbox(int index, const BoundingBox3f &childBbox)
-    {
-        bIsLeaf = false;
-
-        if (children[index] != nullptr)
-            return; // Child already exists
-
-        OctNode *newNode = OctNode::getOctNode(childBbox, depth + 1, true);
-        if (newNode == nullptr)
-            return;
-
-        children[index] = newNode;
-    }
-
-    void createChild(int index)
-    {
-        bIsLeaf = false;
-
-        if (children[index] != nullptr)
-            return; // Child already exists
-
-        BoundingBox3f childBbox = getOctSubcell(bbox, index);
-
-        OctNode *newNode = OctNode::getOctNode(childBbox, depth + 1, true);
-        if (newNode == nullptr)
-            return;
-
-        children[index] = newNode;
-    }
-
-    void pushDataToChildren()
-    {
-        data->foreachEl([this](const Triangle &triangle)
-                        { this->pushToChildren(triangle); });
-        TriangleList::returnTriangleList(data);
-        data = nullptr;
-    }
-
-    bool pushToChildren(const Triangle &triangle)
-    {
-        if (depth >= MAX_OCTREE_DEPTH)
-        {
-            return false;
-        }
-
-        bool success = false;
-
-        for (int i = 0; i < 8; i++)
-        {
-            OctNode *child = children[i];
-            if (child == nullptr)
-            {
-                BoundingBox3f childBbox = getOctSubcell(bbox, i);
-                if (childBbox.overlaps(triangle.getBoundingBox()))
-                {
-                    createChildWithBbox(i, childBbox);
-                    if (children[i])
-                    {
-                        children[i]->push(triangle);
-                        success = true;
-                    }
-                }
-            }
-            else if (child->isIncluding(triangle) && child->push(triangle))
-            {
-                success = true;
-            }
-        }
-
-        return success;
-    }
-
-    bool isIncluding(const Triangle &triangle)
-    {
-        if (triangle.mesh == nullptr)
-            return false;
-        BoundingBox3f elementBbox = triangle.getBoundingBox();
-        return elementBbox.overlaps(bbox);
-    }
-
-    void print(std::ostream &os, int indent) const
-    {
-        printIndent(os, indent);
-        os << "OctNode(depth=" << depth << ", isLeaf=" << bIsLeaf << ")\n";
-        if (hasData())
-        {
-            data->print(os, indent + 1);
-        }
-        if (!isLeaf())
-        {
-            for (int i = 0; i < 8; ++i)
-            {
-                if (children[i])
-                    children[i]->print(os, indent + 1);
-                else
-                {
-                    printIndent(os, indent + 1);
-                    os << "Child " << i << " is null\n";
-                }
-            }
-        }
-    }
-
-    const BoundingBox3f &getBoundingBox() const
-    {
-        return bbox;
-    }
-
-    const TriangleList *getData() const
-    {
-        return data;
-    }
-
-    OctNode *getChild(int index) const
-    {
-        if (index < 0 || index >= 8)
-            return nullptr; // Invalid index
-        return children[index];
-    }
-
-private:
-    BoundingBox3f bbox;
-    OctNode *children[8] = {nullptr};
-    TriangleList *data = nullptr;
-    int depth = 0;
-    bool bIsLeaf = false;
-};
-
+template <int MaxDepth>
 class Octree
 {
 public:
-    Octree(const BoundingBox3f &bbox)
-        : m_bbox(bbox)
-    {
-        m_root = OctNode::getOctNode(bbox, 0, true);
-    }
-
-    void addMesh(Mesh *mesh)
-    {
-        if (mesh == nullptr)
-            return;
-        for (uint32_t i = 0; i < mesh->getTriangleCount(); i++)
-        {
-            Triangle *triangle = Triangle::getTriangle(i, mesh);
-            m_root->push(*triangle);
-        }
-    }
-
-    void print(std::ostream &os, int indent) const
-    {
-        if (m_root)
-        {
-            m_root->print(os, indent);
-        }
-        else
-        {
-            printIndent(os, indent);
-            os << "Octree is empty\n";
-        }
-    }
-
-    bool rayIntersect(Ray3f &ray, Intersection &its, uint32_t &fIndex, bool shadowRay)
-    {
-        float u, v, t;
-
-        bool foundIntersection = false;
-        std::queue<OctNode *> queue;
-        queue.push(m_root);
-        for (; !queue.empty(); queue.pop())
-        {
-            auto octNode = queue.front();
-            if (octNode == nullptr)
-                break;
-
-            if (octNode->isLeaf())
-            {
-                auto data = octNode->getData();
-                if (data != nullptr && data->getTriangleCount() > 0)
-                {
-                    // Iterate through all triangles in this node
-                    // and check for intersections
-                    for (int i = 0; i < data->getTriangleCount(); i++)
-                    {
-                        const Triangle *triangle = data->getTriangle(i);
-                        if (triangle != nullptr)
-                        {
-                            if (triangle->mesh->rayIntersect(triangle->fIndex, ray, u, v, t))
-                            {
-                                /* An intersection was found! Can terminate
-                                   immediately if this is a shadow ray query */
-                                if (shadowRay)
-                                    return true;
-                                if (t < ray.maxt)
-                                {
-                                    ray.maxt = its.t = t;
-                                    its.uv = Point2f(u, v);
-                                    its.mesh = triangle->mesh;
-                                    fIndex = triangle->fIndex;
-                                    foundIntersection = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            else
-            {
-                for (int i = 0; i < 8; i++)
-                {
-                    auto child = octNode->getChild(i);
-                    float nearT, farT;
-                    if (child == nullptr)
-                        continue;
-                    if (child->getBoundingBox().rayIntersect(ray, nearT, farT) && ray.maxt > nearT)
-                    {
-                        queue.push(child);
-                    }
-                }
-            }
-        }
-
-        return foundIntersection;
-    }
+    void build(const std::vector<Mesh *> &meshes);
 
 private:
-    OctNode *m_root = nullptr;
-    BoundingBox3f m_bbox; ///< Bounding box of the entire octree
+    void addTriangle(const Triangle &triangle);
+
+private:
+    static const int MAX_DEPTH = MaxDepth;
+    static const int MAX_NODE_COUNT = std::pow(2, MaxDepth);
+    BoundingBox3f m_bbox;
+    static OctNode m_nodes[MAX_NODE_COUNT];
 };
 
-template <>
-int StackAllocator<Triangle, TOTAL_TRIANGLE_COUNT>::currentCount = 0;
-template <>
-Triangle StackAllocator<Triangle, TOTAL_TRIANGLE_COUNT>::pool[TOTAL_TRIANGLE_COUNT] = {Triangle()};
-template <>
-std::queue<Triangle *> StackAllocator<Triangle, TOTAL_TRIANGLE_COUNT>::tmpPool = std::queue<Triangle *>();
+template <int MaxDepth>
+class OctreeVisitor
+{
+public:
+    OctreeVisitor(const Octree<MaxDepth> &octree);
 
-template <>
-int StackAllocator<TriangleList, TOTAL_LIST_COUNT>::currentCount = 0;
-template <>
-TriangleList StackAllocator<TriangleList, TOTAL_LIST_COUNT>::pool[TOTAL_LIST_COUNT] = {TriangleList()};
-template <>
-std::queue<TriangleList *> StackAllocator<TriangleList, TOTAL_LIST_COUNT>::tmpPool = std::queue<TriangleList *>();
-
-template <>
-int StackAllocator<OctNode, TOTAL_OCT_NODE_COUNT>::currentCount = 0;
-template <>
-OctNode StackAllocator<OctNode, TOTAL_OCT_NODE_COUNT>::pool[TOTAL_OCT_NODE_COUNT] = {OctNode()};
-template <>
-std::queue<OctNode *> StackAllocator<OctNode, TOTAL_OCT_NODE_COUNT>::tmpPool = std::queue<OctNode *>();
+private:
+    int m_depth;
+    int m_path;
+    int m_nodeIndex;
+};
 
 NORI_NAMESPACE_END
