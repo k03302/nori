@@ -22,13 +22,6 @@ void Accel::addMesh(Mesh *mesh)
 
 void Accel::build()
 {
-    m_octree = new Octree(m_bbox);
-    for (auto &mesh : m_meshes)
-    {
-        m_octree->addMesh(mesh);
-    }
-
-    // m_octree->print(std::cout, 0);
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
@@ -37,10 +30,6 @@ bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) c
     uint32_t f = (uint32_t)-1;      // Triangle index of the closest intersection
 
     Ray3f ray(ray_); /// Make a copy of the ray (we will need to update its '.maxt' value)
-
-    foundIntersection = m_octree->rayIntersect(ray, its, f, shadowRay);
-    if (shadowRay)
-        return foundIntersection;
 
     ///* Brute force search through all triangles */
     // for (uint32_t idx = 0; idx < m_mesh->getTriangleCount(); ++idx) {
