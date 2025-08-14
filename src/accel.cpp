@@ -22,6 +22,9 @@ void Accel::addMesh(Mesh *mesh)
 
 void Accel::build()
 {
+    auto &octree = Octree<10>::getInstance();
+    octree.build(m_meshes);
+    octree.printStatus();
 }
 
 bool Accel::rayIntersect(const Ray3f &ray_, Intersection &its, bool shadowRay) const
